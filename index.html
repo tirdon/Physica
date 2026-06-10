@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Physica</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #101014;
+      color: #e8e8ec;
+      font: 14px/1.4 -apple-system, system-ui, sans-serif;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 16px; }
+    .scene-host { position: relative; }   /* anchor for the debug-overlay labels */
+    canvas#main {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      background: #16161c;
+      border-radius: 8px;
+      touch-action: none;
+    }
+    .playback {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 2px;
+    }
+    .playback button {
+      width: 72px;
+      padding: 6px 0;
+      border: 1px solid #3a3a44;
+      border-radius: 6px;
+      background: #1e1e26;
+      color: inherit;
+      cursor: pointer;
+    }
+    .playback button:hover { background: #2a2a34; }
+    .playback input[type="range"] { flex: 1; accent-color: #5b8cff; }
+    .playback .time { min-width: 96px; text-align: right; font-variant-numeric: tabular-nums; color: #9a9aa6; }
+    .hint { color: #62626e; padding: 4px 2px; }
+    .overlay-label {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(91, 140, 255, 0.85);
+      color: #fff;
+      font: 11px/1.5 ui-monospace, monospace;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Physica</h1>
+    <div class="scene-host" id="scene-host">
+      <canvas id="main"></canvas>
+    </div>
+    <div class="playback" id="playback">
+      <button id="playpause">Pause</button>
+      <input id="scrub" type="range" min="0" max="1000" value="0" step="1">
+      <span class="time" id="time">0.00 / 0.00 s</span>
+    </div>
+    <p class="hint">Hold <kbd>Shift</kbd> to show entity indices. Drag the slider to scrub the timeline.</p>
+  </main>
+  <script type="module">
+    import { init } from "./js/index.js";
+    await init({ getImports() { return {}; } });
+  </script>
+</body>
+</html>
