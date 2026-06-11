@@ -122,6 +122,16 @@ public struct TransformComponent: Component {
     public var debugString: String { transform.debugDescription }
 }
 
+/// Procedural grain the renderer applies to a path's fill and stroke.
+/// World-anchored noise — it sticks to the geometry, not the screen.
+public enum PathTexture: Sendable, Equatable {
+    case flat
+    /// Coarse board grain with voids, like chalk on slate.
+    case chalk
+    /// Fine diagonal graphite striations.
+    case pencil
+}
+
 /// Fill/stroke styling consumed by the snapshot pass.
 public struct RenderStyleComponent: Component {
     public var color: Color
@@ -129,22 +139,38 @@ public struct RenderStyleComponent: Component {
     public var strokeWidth: Real
     public var isFilled: Bool
     public var opacity: Real
+    public var texture: PathTexture
 
     public init(
         color: Color = .white,
         strokeColor: Color? = nil,
         strokeWidth: Real = 0.04,
         isFilled: Bool = true,
-        opacity: Real = 1
+        opacity: Real = 1,
+        texture: PathTexture = .flat
     ) {
         self.color = color
         self.strokeColor = strokeColor
         self.strokeWidth = strokeWidth
         self.isFilled = isFilled
         self.opacity = opacity
+        self.texture = texture
     }
 
     public var debugString: String {
         "style(\(color.debugDescription), stroke: \(strokeColor?.debugDescription ?? "none"), opacity: \(fmt(opacity, decimals: 2)))"
+    }
+}
+
+@MainActor
+public extension Entity {
+    /// `title.textured(.chalk)` / `shape.textured(.pencil)` — chainable; applies
+    /// to anything the snapshot turns into path primitives (shapes, text, math).
+    @discardableResult
+    func textured(_ texture: PathTexture) -> Self {
+        var style = components[RenderStyleComponent.self] ?? RenderStyleComponent()
+        style.texture = texture
+        components[RenderStyleComponent.self] = style
+        return self
     }
 }

@@ -148,15 +148,38 @@ public struct Mesh: Sendable, Equatable {
 
 // MARK: - Component + entity
 
+/// How the renderer lights a mesh.
+public enum Shading: Sendable, Equatable {
+    case lambert
+    /// Cel look: diffuse quantized into `bands` flat steps, plus an
+    /// inverted-hull outline (model units; 0 disables it). Note: the hull
+    /// inflates along vertex normals, so hard-edged meshes (box) crack
+    /// slightly at corners — outlines shine on smooth surfaces.
+    case toon(bands: Int, outline: Real)
+
+    /// Default cel: 3 bands + a thin dark outline.
+    public static var toon: Shading { .toon(bands: 3, outline: 0.035) }
+
+    public var debugString: String {
+        switch self {
+        case .lambert: return "lambert"
+        case .toon(let bands, let outline):
+            return "toon(bands: \(bands), outline: \(fmt(outline, decimals: 3)))"
+        }
+    }
+}
+
 public struct ModelComponent: Component {
     public var mesh: Mesh
     public var color: Color
     public var opacity: Real
+    public var shading: Shading
 
-    public init(mesh: Mesh, color: Color = .blue, opacity: Real = 1) {
+    public init(mesh: Mesh, color: Color = .blue, opacity: Real = 1, shading: Shading = .lambert) {
         self.mesh = mesh
         self.color = color
         self.opacity = opacity
+        self.shading = shading
     }
 
     public var debugString: String { mesh.debugString }
@@ -176,6 +199,13 @@ open class MeshEntity: Entity {
     public init(mesh: Mesh, color: Color = .blue) {
         super.init()
         components[ModelComponent.self] = ModelComponent(mesh: mesh, color: color)
+    }
+
+    /// `ball.shaded(.toon)` — chainable, like PathEntity's `stroke(_:width:)`.
+    @discardableResult
+    public func shaded(_ shading: Shading) -> Self {
+        components[ModelComponent.self]?.shading = shading
+        return self
     }
 
     public override init() {

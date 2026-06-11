@@ -10,6 +10,8 @@ struct DrawCommand {
         case pathCover
         case stroke
         case mesh
+        /// Inverted-hull toon outline: same index range as its mesh, own slot.
+        case meshOutline
     }
 
     var kind: Kind
@@ -55,23 +57,42 @@ enum GeometryUploader {
 
     // MARK: Uniform slots
 
-    private static func appendUniformSlot(model: Matrix4, color: Color, into packet: inout FramePacket) -> Int {
+    /// `params` is the shader's free vec4: paths use x = texture mode
+    /// (0 flat / 1 chalk / 2 pencil); meshes use x = shading (0 lambert /
+    /// 1 toon), y = toon bands, z = outline thickness (vs_outline inflate).
+    private static func appendUniformSlot(
+        model: Matrix4, color: Color, params: [Float32] = [0, 0, 0, 0],
+        into packet: inout FramePacket
+    ) -> Int {
         let offset = packet.uniforms.count * 4
         packet.uniforms.append(contentsOf: model.floatArray)
         packet.uniforms.append(contentsOf: [color.r, color.g, color.b, color.a])
-        packet.uniforms.append(contentsOf: [0, 0, 0, 0])
+        packet.uniforms.append(contentsOf: params)
         let pad = FramePacket.uniformSlotFloats - 24
         packet.uniforms.append(contentsOf: [Float32](repeating: 0, count: pad))
         return offset
     }
 
+    private static func params(for texture: PathTexture) -> [Float32] {
+        switch texture {
+        case .flat: return [0, 0, 0, 0]
+        case .chalk: return [1, 0, 0, 0]
+        case .pencil: return [2, 0, 0, 0]
+        }
+    }
+
     // MARK: Meshes
 
     private static func appendMesh(_ mesh: MeshDraw, into packet: inout FramePacket) {
+        var shadingParams: [Float32] = [0, 0, 0, 0]
+        var outline: Real = 0
+        if case .toon(let bands, let outlineWidth) = mesh.shading {
+            shadingParams = [1, Float32(max(bands, 2)), 0, 0]
+            outline = outlineWidth
+        }
+        let opaqueColor = mesh.color.with(opacity: Float(mesh.opacity))
         let slot = appendUniformSlot(
-            model: mesh.model,
-            color: mesh.color.with(opacity: Float(mesh.opacity)),
-            into: &packet
+            model: mesh.model, color: opaqueColor, params: shadingParams, into: &packet
         )
         let baseVertex = packet.meshVertices.count / 6
         for index in 0..<mesh.positions.count {
@@ -84,6 +105,24 @@ enum GeometryUploader {
         }
         let indexStart = packet.meshIndices.count
         packet.meshIndices.append(contentsOf: mesh.indices)
+
+        // Outline first; the base mesh's nearer front faces depth-win inside,
+        // leaving the inflated hull visible only as a silhouette ring.
+        if outline > 0 {
+            let outlineSlot = appendUniformSlot(
+                model: mesh.model,
+                color: Color(hex: 0x14141A).with(opacity: Float(mesh.opacity)),
+                params: [0, 0, Float32(outline), 0],
+                into: &packet
+            )
+            packet.commands.append(DrawCommand(
+                kind: .meshOutline,
+                indexStart: indexStart,
+                indexCount: mesh.indices.count,
+                baseVertex: baseVertex,
+                uniformOffset: outlineSlot
+            ))
+        }
         packet.commands.append(DrawCommand(
             kind: .mesh,
             indexStart: indexStart,
@@ -108,7 +147,9 @@ enum GeometryUploader {
     }
 
     private static func appendFill(_ path: PathPrimitive, color: Color, into packet: inout FramePacket) {
-        let slot = appendUniformSlot(model: .identity, color: color, into: &packet)
+        let slot = appendUniformSlot(
+            model: .identity, color: color, params: params(for: path.style.texture), into: &packet
+        )
 
         // Pass A: triangle fans (apex = first point) into the stencil, all contours.
         let fanStart = packet.flatVertices.count / 3
@@ -161,7 +202,9 @@ enum GeometryUploader {
     }
 
     private static func appendStroke(_ path: PathPrimitive, color: Color, into packet: inout FramePacket) {
-        let slot = appendUniformSlot(model: .identity, color: color, into: &packet)
+        let slot = appendUniformSlot(
+            model: .identity, color: color, params: params(for: path.style.texture), into: &packet
+        )
         let halfWidth = max(path.style.strokeWidth, 0.001) / 2
 
         // Count segments across all contours so strokeProgress caps globally
@@ -171,10 +214,20 @@ enum GeometryUploader {
             totalSegments += contour.points.count - 1 + (contour.isClosed ? 1 : 0)
         }
         guard totalSegments > 0 else { return }
-        let drawnSegments = path.strokeProgress >= 0.9999
-            ? totalSegments
-            : Int((Real(totalSegments) * min(max(path.strokeProgress, 0), 1)).rounded(.down))
-        guard drawnSegments > 0 else { return }
+
+        // Continuous reveal: full quads plus a fractional tip on the boundary
+        // segment, so draw grows and erase retracts smoothly along a side.
+        // Integer-only capping pops whole segments — invisible on a flattened
+        // circle (~100 segments), glaring on a 3-segment triangle.
+        let progress = min(max(path.strokeProgress, 0), 1)
+        let exact = Real(totalSegments) * progress
+        var fullSegments = min(Int(exact.rounded(.down)), totalSegments)
+        var tipFraction = exact - Real(fullSegments)
+        if progress >= 0.9999 {
+            fullSegments = totalSegments
+            tipFraction = 0
+        }
+        guard fullSegments > 0 || tipFraction > 1e-4 else { return }
 
         let start = packet.flatVertices.count / 3
         var emitted = 0
@@ -182,11 +235,18 @@ enum GeometryUploader {
             let points = contour.points
             let segmentCount = points.count - 1 + (contour.isClosed ? 1 : 0)
             for segment in 0..<segmentCount {
-                if emitted >= drawnSegments { break outer }
                 let a = points[segment]
                 let b = points[(segment + 1) % points.count]
-                appendStrokeQuad(from: a, to: b, halfWidth: halfWidth, into: &packet)
-                emitted += 1
+                if emitted < fullSegments {
+                    appendStrokeQuad(from: a, to: b, halfWidth: halfWidth, into: &packet)
+                    emitted += 1
+                    continue
+                }
+                if tipFraction > 1e-4 {
+                    let tip = a + (b - a) * tipFraction
+                    appendStrokeQuad(from: a, to: tip, halfWidth: halfWidth, into: &packet)
+                }
+                break outer
             }
         }
         let count = packet.flatVertices.count / 3 - start

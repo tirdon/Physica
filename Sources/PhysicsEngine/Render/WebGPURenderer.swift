@@ -19,6 +19,7 @@ final class WebGPURenderer: RenderBackend {
     private var coverPipeline: JSValue = .undefined
     private var strokePipeline: JSValue = .undefined
     private var meshPipeline: JSValue = .undefined
+    private var outlinePipeline: JSValue = .undefined
 
     private var globalsBuffer: JSValue = .undefined
     private var globalsBindGroup: JSValue = .undefined
@@ -183,7 +184,7 @@ final class WebGPURenderer: RenderBackend {
 
         func pipeline(
             vertexEntry: String, fragmentEntry: String, buffers: JSValue,
-            target: JSValue, depthStencil: JSValue
+            target: JSValue, depthStencil: JSValue, cullMode: String = "none"
         ) -> JSValue {
             device.createRenderPipeline([
                 "layout": layout,
@@ -199,7 +200,7 @@ final class WebGPURenderer: RenderBackend {
                 ].jsValue,
                 "primitive": [
                     "topology": JSValue.string("triangle-list"),
-                    "cullMode": JSValue.string("none"),
+                    "cullMode": JSValue.string(cullMode),
                 ].jsValue,
                 "depthStencil": depthStencil,
                 "multisample": ["count": JSValue.number(4)].jsValue,
@@ -246,6 +247,22 @@ final class WebGPURenderer: RenderBackend {
                 front: stencilFace(compare: "always", passOp: "keep"),
                 back: stencilFace(compare: "always", passOp: "keep")
             )
+        )
+
+        // Toon outline: inflated hull with its camera-facing side culled, so
+        // only the far shell survives the base mesh's depth test — a
+        // silhouette ring. Our UV-grid meshes wind outward faces CW, which is
+        // "back" under WebGPU's default ccw frontFace; the near side is
+        // therefore culled with "back", not "front".
+        outlinePipeline = pipeline(
+            vertexEntry: "vs_outline", fragmentEntry: "fs_outline", buffers: meshVertexBuffers,
+            target: target(blend: true),
+            depthStencil: depthStencil(
+                depthWrite: true, depthCompare: "less",
+                front: stencilFace(compare: "always", passOp: "keep"),
+                back: stencilFace(compare: "always", passOp: "keep")
+            ),
+            cullMode: "back"
         )
 
         globalsBuffer = device.createBuffer([
@@ -348,8 +365,8 @@ final class WebGPURenderer: RenderBackend {
         var boundMesh = false
         for command in packet.commands {
             switch command.kind {
-            case .mesh:
-                _ = pass.setPipeline(meshPipeline)
+            case .mesh, .meshOutline:
+                _ = pass.setPipeline(command.kind == .mesh ? meshPipeline : outlinePipeline)
                 if !boundMesh {
                     _ = pass.setVertexBuffer(0, meshBuffer.buffer)
                     _ = pass.setIndexBuffer(indexBuffer.buffer, "uint32")

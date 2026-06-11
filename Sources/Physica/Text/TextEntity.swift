@@ -7,6 +7,10 @@ public struct TextComponent: Component {
         public var path: Path
         /// Layout offset in em units (pen position).
         public var offset: SIMD2<Real>
+        /// Per-glyph color override; nil inherits the entity's style color.
+        public var color: Color?
+        /// Per-glyph opacity factor on top of the entity style's opacity.
+        public var opacity: Real = 1
     }
 
     public var glyphs: [PositionedGlyph]

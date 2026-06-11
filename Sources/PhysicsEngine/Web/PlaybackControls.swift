@@ -11,6 +11,8 @@ final class PlaybackControls {
     private let button: JSValue
     private let slider: JSValue
     private let label: JSValue
+    /// Canvas-centered overlay, shown only when the timeline has finished.
+    private let replay: JSValue
 
     private var isScrubbing = false
     private var closures: [JSClosure] = []
@@ -26,13 +28,22 @@ final class PlaybackControls {
         self.button = button
         self.slider = slider
         self.label = label
+        self.replay = document.getElementById("replay")
 
         listen(button, "click") { [weak self] _ in
             guard let self else { return }
-            if self.scene.timeline.isPaused {
+            if Self.isAtEnd(self.scene.timeline.state) {
+                self.restart()
+            } else if self.scene.timeline.isPaused {
                 self.scene.resume()
             } else {
                 self.scene.timeline.setPaused(true)
+            }
+        }
+
+        if !replay.isNull {
+            listen(replay, "click") { [weak self] _ in
+                self?.restart()
             }
         }
 
@@ -61,16 +72,36 @@ final class PlaybackControls {
         _ = element.addEventListener(event, closure)
     }
 
+    /// Rewind to the start and play. Scripted clips replay deterministically;
+    /// system-driven motion (pendulum, physics) re-runs live from t = 0.
+    private func restart() {
+        scene.seek(to: 0)
+        scene.resume()
+    }
+
+    /// End = playhead at the duration. (TimelineState.isFinished tracks the
+    /// clip cursor, which a seek leaves ON the last clip, not past it.)
+    private static func isAtEnd(_ state: TimelineState) -> Bool {
+        state.duration > 0 && state.currentTime >= state.duration - 1e-6
+    }
+
     /// Called every frame: reflect timeline state into the DOM.
     func sync() {
         let state = scene.timeline.state
-        button.innerText = .string(state.isPaused ? "Play" : "Pause")
+        let ended = Self.isAtEnd(state)
+        button.innerText = .string(
+            ended ? "Replay" : (state.isPaused ? "Play" : "Pause")
+        )
         label.innerText = .string(
             "\(fmt(state.currentTime, decimals: 2)) / \(fmt(state.duration, decimals: 2)) s"
         )
         if !isScrubbing {
             let fraction = state.duration > 0 ? state.currentTime / state.duration : 0
             slider.value = .string(String(Int((fraction * 1000).rounded())))
+        }
+        if !replay.isNull {
+            // Hidden while dragging the slider so it doesn't pop mid-scrub.
+            replay.hidden = .boolean(!ended || isScrubbing)
         }
     }
 }

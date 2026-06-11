@@ -138,8 +138,8 @@ public extension Animatable {
     }
 
     @discardableResult
-    func setColor(to color: Color) -> Animation {
-        animation(ColorBlueprint(color: color))
+    func color(_ value: Color) -> Animation {
+        animation(ColorBlueprint(color: value))
     }
 
     @discardableResult

@@ -26,10 +26,20 @@ enum App {
             _ = console.warn("Physica: font unavailable —", String(describing: error))
         }
 
+        // Same deal for MathJax (needs DOM + CDN): the demo skips math without it.
+        var formula: TextEntity?
+        do {
+            formula = try await MathJaxLoader.formula(
+                "\\ddot{\\theta} = -\\frac{g}{\\ell}\\,\\sin\\theta", fontSize: 0.75
+            )
+        } catch {
+            _ = console.warn("Physica: MathJax unavailable —", String(describing: error))
+        }
+
         // Build the scene script first — it must work without a GPU (headless smoke).
         let engine = Engine()
         let scene = engine.makeScene(name: "pendulum") { scene in
-            PendulumDemo.build(scene, font: font)
+            PendulumDemo.build(scene, font: font, formula: formula)
         }
         self.engine = engine
         _ = console.log("Physica: scene ready\n" + scene.timeline.debugString)

@@ -7,11 +7,13 @@ public struct PathStyle: Sendable, Equatable {
     /// nil → no stroke pass.
     public var stroke: Color?
     public var strokeWidth: Real
+    public var texture: PathTexture
 
-    public init(fill: Color?, stroke: Color?, strokeWidth: Real) {
+    public init(fill: Color?, stroke: Color?, strokeWidth: Real, texture: PathTexture = .flat) {
         self.fill = fill
         self.stroke = stroke
         self.strokeWidth = strokeWidth
+        self.texture = texture
     }
 }
 
@@ -45,6 +47,7 @@ public struct MeshDraw: Sendable {
     public var model: Matrix4
     public var color: Color
     public var opacity: Real
+    public var shading: Shading = .lambert
 
     public var debugString: String {
         "mesh[v\(positions.count) i\(indices.count)]"
@@ -150,7 +153,8 @@ extension Scene {
                     style: PathStyle(
                         fill: style.isFilled ? style.color.with(opacity: opacity) : nil,
                         stroke: style.strokeColor.map { $0.with(opacity: opacity) },
-                        strokeWidth: style.strokeWidth
+                        strokeWidth: style.strokeWidth,
+                        texture: style.texture
                     ),
                     strokeProgress: pathComponent.strokeProgress,
                     fillOpacityFactor: pathComponent.fillOpacityFactor
@@ -165,7 +169,8 @@ extension Scene {
                 indices: model.mesh.indices,
                 model: entity.worldTransform.matrix,
                 color: model.color,
-                opacity: model.opacity
+                opacity: model.opacity,
+                shading: model.shading
             )))
         }
 
@@ -192,12 +197,18 @@ extension Scene {
                     )
                 }
                 guard !contours.isEmpty else { continue }
+                // Glyph-slice overrides (`title[0..<3].color/fade`) win
+                // over the entity style, per glyph.
+                let glyphOpacity = opacity * Float(glyph.opacity)
+                let fillColor = glyph.color ?? style.color
+                let strokeColor = glyph.color ?? style.strokeColor ?? style.color
                 primitives.append(.path(PathPrimitive(
                     contours: contours,
                     style: PathStyle(
-                        fill: style.isFilled ? style.color.with(opacity: opacity) : nil,
-                        stroke: (style.strokeColor ?? style.color).with(opacity: opacity),
-                        strokeWidth: style.strokeWidth
+                        fill: style.isFilled ? fillColor.with(opacity: glyphOpacity) : nil,
+                        stroke: strokeColor.with(opacity: glyphOpacity),
+                        strokeWidth: style.strokeWidth,
+                        texture: style.texture
                     ),
                     strokeProgress: factors.stroke,
                     fillOpacityFactor: factors.fill

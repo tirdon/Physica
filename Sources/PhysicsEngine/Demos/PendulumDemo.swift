@@ -52,7 +52,7 @@ struct PendulumSystem: System {
 
 @MainActor
 enum PendulumDemo {
-    static func build(_ scene: Scene, font: Font?) {
+    static func build(_ scene: Scene, font: Font?, formula: TextEntity? = nil) {
         scene.registerSystem(PendulumSystem.self)
         scene.registerSystem(HamiltonianSystem.self)
 
@@ -70,9 +70,17 @@ enum PendulumDemo {
         scene.play(bob.move(to: .origin))
         scene.wait()
 
-        // ---- Custom system takes over ----
+        // ---- Custom system takes over; its equation of motion writes itself
+        //      overhead while the pendulum swings (MathJax → SVG → glyph paths) ----
         string.components[PendulumComponent.self] = PendulumComponent(.string, string)
         bob.components[PendulumComponent.self] = PendulumComponent(.bob, bob.animationTargets[0])
+        if let formula {
+            formula.textured(.pencil)
+            formula.position = Position(0, 2.35, 0)
+            scene.play(.write(formula), for: 2.5.s)
+            // Highlight the nonlinearity — "sin θ" is the last four glyphs.
+            scene.play(formula[(formula.glyphCount - 4)...].color(.teal), for: 0.5.s)
+        }
         scene.wait(3.s)                                        // swing freely
         scene.pause(PendulumSystem.self)                       // frozen for 1 s, then resumes
         scene.wait(1.5.s)
@@ -81,15 +89,26 @@ enum PendulumDemo {
         scene.play(pivot.move(to: .bottom), string.move(to: .bottom), bob.move(to: .bottom))
         scene.wait(1.5.s)
 
-        // ---- Hand off: fade the pendulum out ----
-        scene.play(pivot.fade(to: 0), string.fade(to: 0), bob.fade(to: 0), for: 0.6.s)
+        // ---- Hand off: pendulum fades while its equation unwrites ----
+        if let formula {
+            scene.play(
+                .erase(formula),
+                pivot.fade(to: 0), string.fade(to: 0), bob.fade(to: 0),
+                for: 0.8.s
+            )
+        } else {
+            scene.play(pivot.fade(to: 0), string.fade(to: 0), bob.fade(to: 0), for: 0.6.s)
+        }
 
         // ---- Text write (no scene.add — .write introduces the entity) ----
         var title: TextEntity?
         if let font {
             let text = TextEntity("Physica", font: font, fontSize: 1.2, color: .white)
+                .textured(.chalk)
             text.position = Position(0, 2.3, 0)
             scene.play(.write(text))
+            // Per-glyph gradient sweep, chalk grain intact.
+            scene.play(text.color(mix: [.blue, .teal, .purple]), for: 0.8.s)
             scene.wait(0.5.s)
             title = text
         }
@@ -98,8 +117,8 @@ enum PendulumDemo {
         let shape = Circle(radius: 0.9, color: .blue).stroke(.white, width: 0.035)
         shape.position = Position(-3.6, 0.2, 0)
         scene.play(.draw(shape), for: 1.2.s)
-        scene.play(shape.morph(to: Rectangle(width: 1.7, height: 1.7)), shape.setColor(to: .teal))
-        scene.play(shape.morph(to: Triangle(side: 2)), shape.setColor(to: .orange))
+        scene.play(shape.morph(to: Rectangle(width: 1.7, height: 1.7)), shape.color(.teal))
+        scene.play(shape.morph(to: Triangle(side: 2)), shape.color(.orange))
         scene.wait(0.5.s)
         // Clear the left flank for the drop: backward draw, then the shape
         // leaves the scene entirely.
@@ -116,6 +135,7 @@ enum PendulumDemo {
         floor.position = Position(0.2, -2.9, 0)
 
         let ball = MeshEntity.body(.sphere(radius: 0.45), mass: 1, restitution: 0.65, color: .red)
+            .shaded(.toon)
         ball.position = Position(-2.4, 2.4, 0)
 
         let crate = MeshEntity.body(
@@ -132,7 +152,7 @@ enum PendulumDemo {
 
         let donut = MeshEntity.body(
             .torus(majorRadius: 0.5, minorRadius: 0.18), mass: 0.8, restitution: 0.45, color: .purple
-        )
+        ).shaded(.toon)
         // Left of the ball: the egg rolls right (its z-tilt makes it lopsided),
         // so the right flank is its runway — nothing may park there.
         donut.position = Position(-3.5, 2.9, 0)

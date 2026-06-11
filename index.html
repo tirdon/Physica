@@ -42,6 +42,22 @@
     .playback input[type="range"] { flex: 1; accent-color: #5b8cff; }
     .playback .time { min-width: 96px; text-align: right; font-variant-numeric: tabular-nums; color: #9a9aa6; }
     .hint { color: #62626e; padding: 4px 2px; }
+    .replay {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      padding: 12px 28px;
+      border: 1px solid #3a3a44;
+      border-radius: 10px;
+      background: rgba(30, 30, 38, 0.9);
+      color: #e8e8ec;
+      font: inherit;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .replay:hover { background: rgba(42, 42, 52, 0.95); }
+    .replay[hidden] { display: none; }
     .overlay-label {
       position: absolute;
       transform: translate(-50%, -50%);
@@ -60,6 +76,7 @@
     <h1>Physica</h1>
     <div class="scene-host" id="scene-host">
       <canvas id="main"></canvas>
+      <button id="replay" class="replay" hidden>↻ Replay</button>
     </div>
     <div class="playback" id="playback">
       <button id="playpause">Pause</button>

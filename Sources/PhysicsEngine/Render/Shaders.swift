@@ -1,5 +1,7 @@
-// WGSL shaders. One module, four entry-point pairs sharing the same bind layout:
+// WGSL shaders. One module, five entry-point pairs sharing the same bind layout:
 // group 0 = per-frame globals, group 1 = per-draw uniforms (256-byte dynamic slots).
+// draw.params is the free vec4: paths use x = texture (0 flat / 1 chalk / 2 pencil);
+// meshes use x = shading (0 lambert / 1 toon), y = toon bands, z = outline inflate.
 
 enum Shaders {
     static let module = """
@@ -16,20 +18,51 @@ enum Shaders {
     @group(0) @binding(0) var<uniform> globals: Globals;
     @group(1) @binding(0) var<uniform> draw: DrawUniforms;
 
+    fn hash21(p: vec2<f32>) -> f32 {
+        var q = fract(p * vec2<f32>(123.34, 456.21));
+        q = q + dot(q, q + vec2<f32>(45.32, 45.32));
+        return fract(q.x * q.y);
+    }
+
     // ---- Flat 2D (path stencil/cover/stroke) ----
 
+    struct FlatOut {
+        @builtin(position) clip: vec4<f32>,
+        // World-space xy: anchors the procedural grain to the geometry.
+        @location(0) world: vec2<f32>,
+    };
+
     @vertex
-    fn vs_flat(@location(0) position: vec3<f32>) -> @builtin(position) vec4<f32> {
-        return globals.viewProjection * draw.model * vec4<f32>(position, 1.0);
+    fn vs_flat(@location(0) position: vec3<f32>) -> FlatOut {
+        var out: FlatOut;
+        let world = draw.model * vec4<f32>(position, 1.0);
+        out.clip = globals.viewProjection * world;
+        out.world = world.xy;
+        return out;
     }
 
     @fragment
-    fn fs_color() -> @location(0) vec4<f32> {
+    fn fs_color(in: FlatOut) -> @location(0) vec4<f32> {
+        var alpha = draw.color.a;
+        if (draw.params.x > 1.5) {
+            // Pencil: fine graphite striations along one diagonal + grain.
+            let dir = vec2<f32>(0.876, 0.482);   // normalized ~29° hatch
+            let across = dot(in.world, vec2<f32>(-dir.y, dir.x));
+            let along = dot(in.world, dir);
+            let line = hash21(vec2<f32>(floor(across * 90.0), floor(along * 7.0)));
+            let grain = hash21(floor(in.world * 160.0));
+            alpha = alpha * clamp(0.25 + 0.55 * line + 0.30 * grain, 0.0, 1.0);
+        } else if (draw.params.x > 0.5) {
+            // Chalk: coarse slate grain with voids where the chalk skipped.
+            let grain = hash21(floor(in.world * 220.0));
+            let clump = hash21(floor(in.world * 55.0) + vec2<f32>(7.0, 3.0));
+            alpha = alpha * clamp(0.30 + 0.85 * grain * (0.45 + 0.75 * clump), 0.0, 1.0);
+        }
         // Premultiplied output for (one, one-minus-src-alpha) blending.
-        return vec4<f32>(draw.color.rgb * draw.color.a, draw.color.a);
+        return vec4<f32>(draw.color.rgb * alpha, alpha);
     }
 
-    // ---- Lambert mesh ----
+    // ---- Meshes (Lambert / toon) ----
 
     struct MeshIn {
         @location(0) position: vec3<f32>,
@@ -55,9 +88,30 @@ enum Shaders {
         let n = normalize(in.normal);
         let lightDir = normalize(vec3<f32>(0.4, 0.8, 0.6));
         let lambert = max(dot(n, lightDir), 0.0);
-        let backLight = 0.15 * max(dot(n, -lightDir), 0.0);
-        let lit = draw.color.rgb * (0.25 + 0.75 * lambert + backLight);
+        var lit: vec3<f32>;
+        if (draw.params.x > 0.5) {
+            // Cel: diffuse quantized into flat bands, no fill light.
+            let bands = max(draw.params.y, 2.0);
+            let leveled = floor(min(lambert, 0.999) * bands) / (bands - 1.0);
+            lit = draw.color.rgb * (0.30 + 0.70 * min(leveled, 1.0));
+        } else {
+            let backLight = 0.15 * max(dot(n, -lightDir), 0.0);
+            lit = draw.color.rgb * (0.25 + 0.75 * lambert + backLight);
+        }
         return vec4<f32>(lit * draw.color.a, draw.color.a);
+    }
+
+    // ---- Toon outline: inverted hull, drawn with front-face culling ----
+
+    @vertex
+    fn vs_outline(in: MeshIn) -> @builtin(position) vec4<f32> {
+        let inflated = in.position + normalize(in.normal) * draw.params.z;
+        return globals.viewProjection * draw.model * vec4<f32>(inflated, 1.0);
+    }
+
+    @fragment
+    fn fs_outline() -> @location(0) vec4<f32> {
+        return vec4<f32>(draw.color.rgb * draw.color.a, draw.color.a);
     }
     """
 }

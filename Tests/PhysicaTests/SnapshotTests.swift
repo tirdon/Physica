@@ -36,6 +36,43 @@ struct SnapshotTests {
         }
     }
 
+    @Test func shadingFlowsToMeshDraw() {
+        let scene = Scene()
+        let ball = MeshEntity(mesh: .sphere(radius: 0.5), color: .red).shaded(.toon)
+        let plain = MeshEntity(mesh: .sphere(radius: 0.5), color: .blue)
+        scene.add(ball, plain)
+        scene.update(deltaTime: 0.016)
+
+        let primitives = scene.snapshot().primitives
+        guard case .mesh(let toonDraw) = primitives[0], case .mesh(let plainDraw) = primitives[1]
+        else {
+            Issue.record("expected mesh primitives")
+            return
+        }
+        #expect(toonDraw.shading == .toon)
+        #expect(toonDraw.shading == .toon(bands: 3, outline: 0.035))
+        #expect(plainDraw.shading == .lambert)
+    }
+
+    @Test func textureFlowsToPathAndTextStyles() {
+        let scene = Scene()
+        let shape = Circle(radius: 1).textured(.chalk)
+        let text = TextEntity(glyphs: [
+            TextComponent.PositionedGlyph(path: .rect(width: 0.5, height: 0.7), offset: .zero)
+        ]).shown().textured(.pencil)
+        scene.add(shape, text)
+        scene.update(deltaTime: 0.016)
+
+        let primitives = scene.snapshot().primitives
+        guard case .path(let shapeStyle) = primitives[0], case .path(let glyph) = primitives[1]
+        else {
+            Issue.record("expected path primitives")
+            return
+        }
+        #expect(shapeStyle.style.texture == .chalk)
+        #expect(glyph.style.texture == .pencil)
+    }
+
     @Test func painterOrderFollowsSceneOrder() {
         let scene = Scene()
         let a = Circle()

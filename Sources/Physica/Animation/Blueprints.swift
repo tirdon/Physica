@@ -144,7 +144,7 @@ struct RotateBlueprint: AnimationBlueprint {
 
 struct ColorBlueprint: AnimationBlueprint {
     let color: Color
-    var debugLabel: String { "setColor(\(color.debugDescription))" }
+    var debugLabel: String { "color(\(color.debugDescription))" }
 
     func makeTrack(
         target: Entity, duration: TimeInterval, offset: TimeInterval, easing: Easing, in scene: Scene
