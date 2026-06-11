@@ -66,9 +66,9 @@ struct SceneScriptTests {
         script.scene.update(deltaTime: 0.001)
 
         #expect(script.scene.entities.count == 3)
-        #expect(approx(script.pivot.center, Position(0, 3.8, 0)))
+        #expect(approx(script.pivot.center, Position(0, 2.9, 0)))
         // bob carried `move(to: string.end)` into the add clip
-        #expect(approx(script.bobCircle.position, Position(0, -0.2, 0), tolerance: 1e-2))
+        #expect(approx(script.bobCircle.position, Position(0, -1.1, 0), tolerance: 1e-2))
         // updater synced the string to the bob on the same frame
         #expect(approx(script.string.end, script.bobCircle.position, tolerance: 1e-3))
     }
@@ -80,7 +80,7 @@ struct SceneScriptTests {
         script.scene.update(deltaTime: 2.0)
         #expect(approx(script.bobCircle.position, Position(1, 1, 0), tolerance: 1e-3))
         #expect(approx(script.string.end, Position(1, 1, 0), tolerance: 1e-3))
-        #expect(approx(script.string.start, Position(0, 3.8, 0)))
+        #expect(approx(script.string.start, Position(0, 2.9, 0)))
 
         // Through the second play (t = 3): bob back at origin
         script.scene.update(deltaTime: 1.0)
@@ -97,7 +97,7 @@ struct SceneScriptTests {
         script.scene.seek(to: 1.0)           // halfway through the 2s move
 
         let expected = Position.lerp(
-            Position(0, -0.2, 0), Position(1, 1, 0), Easing.smooth.apply(0.5)
+            Position(0, -1.1, 0), Position(1, 1, 0), Easing.smooth.apply(0.5)
         )
         #expect(approx(script.bobCircle.position, expected, tolerance: 1e-2))
         #expect(approx(script.string.end, script.bobCircle.position, tolerance: 1e-3))
@@ -106,7 +106,7 @@ struct SceneScriptTests {
         // Scrub to 0: entities present (add clip is at t = 0), bob at its start.
         script.scene.seek(to: 0)
         #expect(script.scene.entities.count == 3)
-        #expect(approx(script.bobCircle.position, Position(0, -0.2, 0), tolerance: 1e-2))
+        #expect(approx(script.bobCircle.position, Position(0, -1.1, 0), tolerance: 1e-2))
 
         // Resume and replay to the end.
         script.scene.resume()
@@ -129,7 +129,7 @@ struct SceneScriptTests {
         script.scene.update(deltaTime: 0.001)
         let lines = script.scene.debugString.split(separator: "\n").map(String.init)
         #expect(lines[0] == "Scene 'pendulum' entities(3):")
-        #expect(lines[1].hasPrefix("  Wall pos(0.000, 3.800, 0.000)"))
+        #expect(lines[1].hasPrefix("  Wall pos(0.000, 2.900, 0.000)"))
         #expect(lines[2].hasPrefix("  Line pos(0.000, 0.000, 0.000)"))
         #expect(lines[3].hasPrefix("  Circle pos"))
     }

@@ -23,9 +23,22 @@ public final class HamiltonianSystem: System {
 
     /// One deterministic fixed step — the unit tests drive this directly.
     public func step(_ dt: TimeInterval, in scene: Scene) {
-        let entities = scene.performQuery(
+        let all = scene.performQuery(
             .has(PhysicsBodyComponent.self, PhysicsMotionComponent.self)
         )
+        guard !all.isEmpty else { return }
+
+        // Bodies that left 3× the visible frame freeze: no integration, no
+        // contacts. A body that fell off the floor would otherwise be stepped
+        // forever while diverging out of sight.
+        let frame = scene.frameBounds
+        let cullHalfWidth = frame.size.x * 1.5
+        let cullHalfHeight = frame.size.y * 1.5
+        let entities = all.filter { entity in
+            let offset = entity.position - frame.center
+            return Swift.abs(offset.x) <= cullHalfWidth
+                && Swift.abs(offset.y) <= cullHalfHeight
+        }
         guard !entities.isEmpty else { return }
 
         // 1. Free symplectic motion.

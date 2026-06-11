@@ -74,8 +74,7 @@ struct MorphTests {
     @Test func drawRevealsStrokeThenFill() {
         let scene = Scene()
         let triangle = Triangle()
-        scene.add(triangle)
-        scene.play(triangle.draw(), for: 1.s, easing: .linear)
+        scene.play(.draw(triangle), for: 1.s, easing: .linear)  // auto-added by the play clip
 
         scene.update(deltaTime: 0.4)
         var component = triangle.components[PathComponent.self]!

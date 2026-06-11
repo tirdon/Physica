@@ -14,7 +14,7 @@
       font: 14px/1.4 -apple-system, system-ui, sans-serif;
     }
     main { max-width: 960px; margin: 0 auto; padding: 16px; }
-    .scene-host { position: relative; }   /* anchor for the debug-overlay labels */
+    .scene-host { position: relative; overflow: hidden; }   /* anchor + clip for the debug-overlay labels */
     canvas#main {
       display: block;
       width: 100%;

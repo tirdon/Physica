@@ -5,6 +5,8 @@ import Testing
 struct PhysicsTests {
     private func makeWorld() -> (Scene, HamiltonianSystem) {
         let scene = Scene()
+        // Integration tests need open space — keep the 3×-frame cull far away.
+        scene.camera = Camera(projection: .orthographic(height: 100))
         let system = HamiltonianSystem(scene: scene)
         return (scene, system)
     }
@@ -163,5 +165,24 @@ struct PhysicsTests {
     @Test func momentumDebugString() {
         let motion = PhysicsMotionComponent(linearMomentum: Position(1, 0, 0))
         #expect(motion.debugString == "motion(p: (1.000, 0.000, 0.000), L: (0.000, 0.000, 0.000))")
+    }
+
+    @Test func bodiesOutsideTripleFrameFreeze() {
+        // Default fit-10 frame at aspect 1.6 → 10 × 6.25, cull half-extents (15, 9.375).
+        let scene = Scene()
+        let system = HamiltonianSystem(scene: scene)
+        let falling = MeshEntity.body(.sphere(radius: 0.5))
+        falling.position = Position(0, 2, 0)
+        let gone = MeshEntity.body(.sphere(radius: 0.5))
+        gone.position = Position(0, -12, 0)
+        scene.insert(falling)
+        scene.insert(gone)
+
+        hammer(system, scene, steps: 240)  // 1 s
+
+        #expect(falling.position.y < -1)  // kept integrating (≈ −2.9 after 1 s)
+        #expect(approx(gone.position.y, -12))  // frozen exactly where it left
+        let momentum = gone.components[PhysicsMotionComponent.self]!.linearMomentum
+        #expect(approx(momentum.y, 0))
     }
 }

@@ -36,29 +36,44 @@ final class DebugOverlay {
         let width = canvas.clientWidth.number ?? 0
         let height = canvas.clientHeight.number ?? 0
 
+        // Project first and drop labels outside the viewport — an entity that
+        // keeps moving after leaving the frame (a body falling off the floor)
+        // must not drag its label outside the canvas.
+        let slack: Real = 1.02
+        var placements: [(text: String, x: Double, y: Double)] = []
+        placements.reserveCapacity(labels.count)
+        for label in labels {
+            let clip = viewProjection.transform(
+                SIMD4(label.worldPosition.x, label.worldPosition.y, label.worldPosition.z, 1)
+            )
+            guard clip.w > 0 else { continue }   // behind the camera
+            let ndcX = clip.x / clip.w
+            let ndcY = clip.y / clip.w
+            guard abs(ndcX) <= slack, abs(ndcY) <= slack else { continue }
+            placements.append((
+                text: label.text,
+                x: (Double(ndcX) * 0.5 + 0.5) * width,
+                y: (1 - (Double(ndcY) * 0.5 + 0.5)) * height
+            ))
+        }
+
         // Grow/shrink the element pool to match.
-        while labelElements.count < labels.count {
+        while labelElements.count < placements.count {
             let element = document.createElement("div")
             element.className = "overlay-label"
             _ = host.appendChild(element)
             labelElements.append(element)
         }
-        while labelElements.count > labels.count {
+        while labelElements.count > placements.count {
             let element = labelElements.removeLast()
             _ = element.remove()
         }
 
-        for (index, label) in labels.enumerated() {
-            let clip = viewProjection.transform(
-                SIMD4(label.worldPosition.x, label.worldPosition.y, label.worldPosition.z, 1)
-            )
-            let w = clip.w == 0 ? 1 : clip.w
-            let x = (Double(clip.x / w) * 0.5 + 0.5) * width
-            let y = (1 - (Double(clip.y / w) * 0.5 + 0.5)) * height
+        for (index, placement) in placements.enumerated() {
             let element = labelElements[index]
-            element.textContent = .string(label.text)
-            _ = element.style.setProperty("left", "\(Int(x))px")
-            _ = element.style.setProperty("top", "\(Int(y))px")
+            element.textContent = .string(placement.text)
+            _ = element.style.setProperty("left", "\(Int(placement.x))px")
+            _ = element.style.setProperty("top", "\(Int(placement.y))px")
         }
     }
 

@@ -84,57 +84,69 @@ enum PendulumDemo {
         // ---- Hand off: fade the pendulum out ----
         scene.play(pivot.fade(to: 0), string.fade(to: 0), bob.fade(to: 0), for: 0.6.s)
 
-        // ---- Text write ----
+        // ---- Text write (no scene.add — .write introduces the entity) ----
+        var title: TextEntity?
         if let font {
-            let title = TextEntity("Physica", font: font, fontSize: 1.5, color: .white)
-            title.position = Position(0, 2.6, 0)
-            scene.add(title)
-            scene.play(title.write())
+            let text = TextEntity("Physica", font: font, fontSize: 1.2, color: .white)
+            text.position = Position(0, 2.3, 0)
+            scene.play(.write(text))
             scene.wait(0.5.s)
+            title = text
         }
 
-        // ---- Path morph chain ----
+        // ---- Path morph chain (.draw introduces the entity too) ----
         let shape = Circle(radius: 0.9, color: .blue).stroke(.white, width: 0.035)
         shape.position = Position(-3.6, 0.2, 0)
-        scene.add(shape)
-        scene.play(shape.draw(), for: 1.2.s)
+        scene.play(.draw(shape), for: 1.2.s)
         scene.play(shape.morph(to: Rectangle(width: 1.7, height: 1.7)), shape.setColor(to: .teal))
         scene.play(shape.morph(to: Triangle(side: 2)), shape.setColor(to: .orange))
         scene.wait(0.5.s)
+        // Clear the left flank for the drop: backward draw, then the shape
+        // leaves the scene entirely.
+        scene.play(.erase(shape), for: 0.8.s)
 
         // ---- Physics drop: sphere, box, ellipsoid, torus onto a static floor ----
+        // Wider than the ±5 frame so bodies rolling out of view stay supported.
+        // Deep in z too: the tilted donut rolls along z (depth), and must stay
+        // on the slab for the rest of the timeline.
         let floor = MeshEntity.body(
-            .box(halfExtents: SIMD3(5.2, 0.18, 2)),
-            restitution: 0.9, color: Color(hex: 0x2A2A36), mode: .static
+            .box(halfExtents: SIMD3(5.4, 0.18, 7)),
+            restitution: 0.5, color: Color(hex: 0x2A2A36), mode: .static
         )
-        floor.position = Position(1.4, -3.2, 0)
+        floor.position = Position(0.2, -2.9, 0)
 
         let ball = MeshEntity.body(.sphere(radius: 0.45), mass: 1, restitution: 0.65, color: .red)
-        ball.position = Position(-1.4, 2.6, 0)
+        ball.position = Position(-2.4, 2.4, 0)
 
         let crate = MeshEntity.body(
             .box(halfExtents: SIMD3(0.4, 0.4, 0.4)), mass: 1.4, restitution: 0.3, color: .green
         )
-        crate.position = Position(0.4, 3.4, 0)
+        crate.position = Position(-0.6, 2.7, 0)
         crate.orientation = Quaternion(angle: 0.5, axis: Position(0.3, 0, 1).normalized)
 
         let egg = MeshEntity.body(
             .ellipsoid(radii: SIMD3(0.55, 0.38, 0.38)), mass: 1, restitution: 0.5, color: .yellow
         )
-        egg.position = Position(2.2, 2.9, 0)
+        egg.position = Position(1.2, 2.5, 0)
         egg.orientation = Quaternion(angle: 0.4, axis: 1.k)
 
         let donut = MeshEntity.body(
             .torus(majorRadius: 0.5, minorRadius: 0.18), mass: 0.8, restitution: 0.45, color: .purple
         )
-        donut.position = Position(3.9, 3.6, 0)
-        donut.orientation = Quaternion(angle: 0.9, axis: Position(1, 0, 0.2).normalized)
-        donut.components[PhysicsMotionComponent.self] = PhysicsMotionComponent(
-            angularMomentum: Position(0.05, 0.02, 0)
-        )
+        // Left of the ball: the egg rolls right (its z-tilt makes it lopsided),
+        // so the right flank is its runway — nothing may park there.
+        donut.position = Position(-3.5, 2.9, 0)
+        // Nearly flat: a tilted torus rolls in a curve and escapes the frame;
+        // this one bounces, wobbles, and settles where it landed.
+        donut.orientation = Quaternion(angle: 0.18, axis: 1.i)
 
         scene.add(floor, ball, crate, egg, donut)
         scene.wait(5.s)
+
+        // ---- Bookend: unwrite the title ----
+        if let title {
+            scene.play(.erase(title))
+        }
     }
 }
 #endif

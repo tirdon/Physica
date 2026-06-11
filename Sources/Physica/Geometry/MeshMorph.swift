@@ -114,7 +114,7 @@ public enum MeshMorph {
 public extension MeshEntity {
     @discardableResult
     func morph(to target: MeshEntity) -> Animation {
-        Animation(pairs: [(self, MeshMorphBlueprint(target: target))])
+        Animation(pairs: [AnimationPair(target: self, blueprint: MeshMorphBlueprint(target: target))])
     }
 }
 

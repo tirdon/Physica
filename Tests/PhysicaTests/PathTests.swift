@@ -70,11 +70,11 @@ struct PathTests {
     @Test func wallSurfaceCenter() {
         let ceiling = Wall(face: .down)
         // Spec: Wall(face: .down) is the ceiling; its center anchors the pendulum.
-        #expect(approx(ceiling.center, Position(0, 3.8, 0)))
+        #expect(approx(ceiling.center, Position(0, 2.9, 0)))
         #expect(approx(ceiling.worldBounds.size.x, 4))    // hatches excluded
 
         let floor = Wall(face: .up)
-        #expect(approx(floor.center, Position(0, -3.8, 0)))
+        #expect(approx(floor.center, Position(0, -2.9, 0)))
     }
 
     @Test func arrowGeometry() {

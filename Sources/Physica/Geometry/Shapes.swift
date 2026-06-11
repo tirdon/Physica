@@ -243,19 +243,20 @@ public final class Wall: PathEntity {
             )
         )
 
-        // Orient so hatches point away from the face, and snap to the frame edge.
+        // Orient so hatches point away from the face, and snap just inside the
+        // default camera frame (fit-10 at aspect 1.6 → 10 × 6.25).
         switch face {
         case .down:
-            transform.position = Position(0, 3.8, 0)
+            transform.position = Position(0, 2.9, 0)
         case .up:
             transform.orientation = Quaternion(angle: .pi, axis: 1.k)
-            transform.position = Position(0, -3.8, 0)
+            transform.position = Position(0, -2.9, 0)
         case .right:
             transform.orientation = Quaternion(angle: .pi / 2, axis: 1.k)
-            transform.position = Position(-6.0, 0, 0)
+            transform.position = Position(-4.6, 0, 0)
         case .left:
             transform.orientation = Quaternion(angle: -.pi / 2, axis: 1.k)
-            transform.position = Position(6.0, 0, 0)
+            transform.position = Position(4.6, 0, 0)
         }
     }
 

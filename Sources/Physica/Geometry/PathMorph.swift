@@ -130,13 +130,23 @@ public extension PathEntity {
     /// Geometry only; captured at clip start.
     @discardableResult
     func morph(to target: PathEntity) -> Animation {
-        Animation(pairs: [(self, PathMorphBlueprint(target: target))])
+        Animation(pairs: [AnimationPair(target: self, blueprint: PathMorphBlueprint(target: target))])
     }
 
-    /// Progressive outline reveal, then fill fade — Write for shapes.
-    @discardableResult
-    func draw() -> Animation {
-        Animation(pairs: [(self, DrawBlueprint())])
+}
+
+public extension Animation {
+    /// Progressive outline reveal, then fill fade — Write for shapes:
+    /// `scene.play(.draw(shape))`. Adds the entity to the scene if no earlier
+    /// clip did — no `scene.add` needed first.
+    static func draw(_ shape: PathEntity) -> Animation {
+        Animation(pairs: [AnimationPair(target: shape, blueprint: DrawBlueprint())])
+    }
+
+    /// Backward draw: fill fades out, then the outline retracts. The entity
+    /// leaves the scene when the clip completes (scrubbing back restores it).
+    static func erase(_ shape: PathEntity) -> Animation {
+        Animation(pairs: [AnimationPair(target: shape, blueprint: DrawBlueprint(reversed: true))])
     }
 }
 
@@ -210,22 +220,28 @@ final class PathMorphTrack: AnimationTrackProtocol {
 }
 
 struct DrawBlueprint: AnimationBlueprint {
-    var debugLabel: String { "draw()" }
+    /// erase(): same progress mapping run 1 → 0 (fill fades, stroke retracts),
+    /// target removed at the end.
+    var reversed = false
+
+    var debugLabel: String { reversed ? "erase()" : "draw()" }
+    var introducesTarget: Bool { !reversed }
+    var removesTargetAtEnd: Bool { reversed }
 
     func makeTrack(
         target: Entity, duration: TimeInterval, offset: TimeInterval, easing: Easing, in scene: Scene
     ) -> any AnimationTrackProtocol {
         PropertyTrack<Real>(
             target: target, duration: duration, offset: offset, easing: easing,
-            label: "\(name(of: target)).draw()",
-            read: { _ in 0 },
+            label: "\(name(of: target)).\(debugLabel)",
+            read: { _ in reversed ? 1 : 0 },  // draw starts hidden, erase starts shown
             write: { entity, value in
                 guard var component = entity.components[PathComponent.self] else { return }
                 component.strokeProgress = min(value / 0.85, 1)
                 component.fillOpacityFactor = Easing.easeOut.apply(max((value - 0.85) / 0.15, 0))
                 entity.components[PathComponent.self] = component
             },
-            resolveEnd: { _, _ in 1 }
+            resolveEnd: { _, _ in reversed ? 0 : 1 }
         )
     }
 }

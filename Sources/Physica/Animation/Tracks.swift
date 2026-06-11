@@ -237,6 +237,47 @@ final class AddEntitiesTrack: AnimationTrackProtocol {
     }
 }
 
+/// 0-duration track at `offset` (an erase animation's end) that removes its
+/// entity from the scene. Scrubbing back re-inserts at the original root index
+/// so painter's order and debug-label paths survive the round trip.
+@MainActor
+final class RemoveEntityTrack: AnimationTrackProtocol {
+    let duration: TimeInterval = 0
+    let offset: TimeInterval
+    let label: String
+
+    private let entity: Entity
+    private var hasBegun = false
+    /// Root index at clip start; nil = not a scene root then (nothing to remove).
+    private var rootIndex: Int?
+
+    init(entity: Entity, at offset: TimeInterval) {
+        self.entity = entity
+        self.offset = max(offset, 0)
+        self.label = "remove(\(name(of: entity)))"
+    }
+
+    func begin(in scene: Scene) {
+        guard !hasBegun else { return }
+        hasBegun = true
+        rootIndex = scene.entities.firstIndex { $0 === entity }
+    }
+
+    func apply(at clipTime: TimeInterval, in scene: Scene) {
+        guard let index = rootIndex else { return }
+        if clipTime >= offset {
+            scene.detach(entity)
+        } else {
+            scene.insert(entity, at: index)
+        }
+    }
+
+    func rewind(in scene: Scene) {
+        guard let index = rootIndex else { return }
+        scene.insert(entity, at: index)
+    }
+}
+
 /// Suspends one system type for the active window of the clip.
 @MainActor
 final class PauseSystemTrack: AnimationTrackProtocol {

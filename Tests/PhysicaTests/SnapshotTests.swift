@@ -76,6 +76,23 @@ struct SnapshotTests {
         #expect(labels.map(\.text) == ["0", "0.0", "0.1"])
     }
 
+    @Test func debugLabelsSkipInvisibleEntities() {
+        let scene = Scene()
+        let visible = Circle()
+        let faded = Circle()
+        let rect = Rectangle()
+        let tri = Triangle()
+        let group = Group(rect, tri)
+        scene.add(visible, faded, group)
+        scene.update(deltaTime: 0.016)
+        scene.play(faded.fade(to: 0), rect.fade(to: 0), tri.fade(to: 0), for: 0.5.s)
+        scene.update(deltaTime: 1.0)
+
+        // faded ("1") gone; group ("2") hides because nothing under it is visible.
+        let labels = scene.collectDebugLabels()
+        #expect(labels.map(\.text) == ["0"])
+    }
+
     @Test func groupTransformAppliesToChildPrimitives() {
         let scene = Scene()
         let circle = Circle(radius: 0.5)
@@ -116,14 +133,29 @@ struct SnapshotTests {
     }
 
     @Test func unitMoveUsesCameraFrame() {
-        let scene = Scene()  // ortho height 8, aspect 1.6 → frame 12.8 × 8
+        let scene = Scene()  // fit extent 10, aspect 1.6 → frame 10 × 6.25
         let circle = Circle(radius: 0.5)
         scene.add(circle)
         scene.play(circle.move(to: .bottom), for: 1.s)
         scene.update(deltaTime: 2.0)
 
-        // bottom edge −4, padding 0.5, half-extent 0.5 → y = −3
-        #expect(approx(circle.position.y, -3))
+        // bottom edge −3.125, padding 0.5, half-extent 0.5 → y = −2.125
+        #expect(approx(circle.position.y, -2.125))
         #expect(approx(circle.position.x, 0))
+    }
+
+    @Test func fitFrameFollowsAspect() {
+        let camera = Camera()  // default fit extent 10
+        let landscape = camera.visibleRect(aspect: 1.6)
+        #expect(approx(landscape.size.x, 10))
+        #expect(approx(landscape.size.y, 6.25))
+
+        let portrait = camera.visibleRect(aspect: 0.5)
+        #expect(approx(portrait.size.x, 5))
+        #expect(approx(portrait.size.y, 10))
+
+        let square = camera.visibleRect(aspect: 1)
+        #expect(approx(square.size.x, 10))
+        #expect(approx(square.size.y, 10))
     }
 }

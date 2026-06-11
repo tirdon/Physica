@@ -40,8 +40,7 @@ struct TextWriteTests {
     @Test func writeAnimationDrivesProgress() {
         let scene = Scene()
         let text = makeTwoGlyphText()
-        scene.add(text)
-        scene.play(text.write(), for: 2.s)
+        scene.play(.write(text), for: 2.s)  // no scene.add — .write introduces the entity
 
         scene.update(deltaTime: 0.001)
         #expect(approx(text.textComponent.writeProgress, 0, tolerance: 1e-2))
@@ -57,8 +56,7 @@ struct TextWriteTests {
     @Test func snapshotEmitsPerGlyphPrimitivesWithReveal() {
         let scene = Scene()
         let text = makeTwoGlyphText()
-        scene.add(text)
-        scene.play(text.write(), for: 2.s, easing: .linear)
+        scene.play(.write(text), for: 2.s, easing: .linear)
         scene.update(deltaTime: 1.2)  // 60%: glyph 0 finishing, glyph 1 mid-stroke
 
         let primitives = scene.snapshot().primitives
@@ -73,6 +71,26 @@ struct TextWriteTests {
         // Hidden text emits nothing.
         scene.seek(to: 0)
         #expect(scene.snapshot().primitives.isEmpty)
+    }
+
+    @Test func eraseReversesWriteAndRemoves() {
+        let scene = Scene()
+        let text = makeTwoGlyphText()
+        scene.play(.write(text), for: 1.s)
+        scene.play(.erase(text), for: 1.s, easing: .linear)
+
+        scene.update(deltaTime: 1.5)  // mid-erase
+        #expect(scene.entities.contains { $0 === text })
+        let mid = text.textComponent.writeProgress
+        #expect(mid > 0.3 && mid < 0.7)
+
+        scene.update(deltaTime: 1.0)  // past the end: hidden and removed
+        #expect(!scene.entities.contains { $0 === text })
+        #expect(approx(text.textComponent.writeProgress, 0))
+
+        scene.seek(to: 1.0)  // boundary: fully written, still present
+        #expect(scene.entities.contains { $0 === text })
+        #expect(approx(text.textComponent.writeProgress, 1))
     }
 
     @Test func shownSkipsTheReveal() {

@@ -117,17 +117,6 @@ public final class TextEntity: Entity {
         return self
     }
 
-    /// Stroke-then-fill reveal. Duration scales with glyph count unless overridden.
-    @discardableResult
-    public func write() -> Animation {
-        var animation = Animation(pairs: [(self, WriteBlueprint())])
-        animation.duration = .interval(
-            min(0.6 + 0.35 * TimeInterval(textComponent.glyphs.count), 6)
-        )
-        animation.easing = .linear
-        return animation
-    }
-
     public override var localBounds: Bounds {
         let component = textComponent
         var bounds = Bounds.empty
@@ -139,23 +128,55 @@ public final class TextEntity: Entity {
     }
 }
 
+public extension Animation {
+    /// Stroke-then-fill text reveal: `scene.play(.write(title))`. Adds the entity
+    /// to the scene if no earlier clip did — no `scene.add` needed first.
+    /// Duration scales with glyph count unless overridden.
+    static func write(_ text: TextEntity) -> Animation {
+        var animation = Animation(pairs: [AnimationPair(target: text, blueprint: WriteBlueprint())])
+        animation.duration = writeDuration(of: text)
+        animation.easing = .linear
+        return animation
+    }
+
+    /// Backward Write: fill fades, strokes retract, last glyph first. The entity
+    /// leaves the scene when the clip completes (scrubbing back restores it).
+    static func erase(_ text: TextEntity) -> Animation {
+        var animation = Animation(
+            pairs: [AnimationPair(target: text, blueprint: WriteBlueprint(reversed: true))]
+        )
+        animation.duration = writeDuration(of: text)
+        animation.easing = .linear
+        return animation
+    }
+
+    private static func writeDuration(of text: TextEntity) -> Duration {
+        .interval(min(0.6 + 0.35 * TimeInterval(text.textComponent.glyphs.count), 6))
+    }
+}
+
 struct WriteBlueprint: AnimationBlueprint {
+    /// erase(): same progress mapping run 1 → 0, target removed at the end.
+    var reversed = false
+
     var defaultDuration: Duration { .seconds(2) }
-    var debugLabel: String { "write()" }
+    var debugLabel: String { reversed ? "erase()" : "write()" }
+    var introducesTarget: Bool { !reversed }
+    var removesTargetAtEnd: Bool { reversed }
 
     func makeTrack(
         target: Entity, duration: TimeInterval, offset: TimeInterval, easing: Easing, in scene: Scene
     ) -> any AnimationTrackProtocol {
         PropertyTrack<Real>(
             target: target, duration: duration, offset: offset, easing: easing,
-            label: "\(name(of: target)).write()",
-            read: { _ in 0 },  // writing always starts from hidden
+            label: "\(name(of: target)).\(debugLabel)",
+            read: { _ in reversed ? 1 : 0 },  // write starts hidden, erase starts shown
             write: { entity, value in
                 guard var component = entity.components[TextComponent.self] else { return }
                 component.writeProgress = value
                 entity.components[TextComponent.self] = component
             },
-            resolveEnd: { _, _ in 1 }
+            resolveEnd: { _, _ in reversed ? 0 : 1 }
         )
     }
 }

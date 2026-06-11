@@ -7,7 +7,7 @@
 public protocol Animatable {
     var animationTargets: [Entity] { get }
     /// Pending property changes carried into `scene.add(...)`/`scene.play(...)`.
-    var carriedBlueprints: [(target: Entity, blueprint: any AnimationBlueprint)] { get }
+    var carriedBlueprints: [AnimationPair] { get }
 }
 
 /// Transform access shared by `Entity` and `Animation`.
@@ -93,7 +93,7 @@ open class Entity: Animatable, HasTransform, Identifiable, Hashable {
     // MARK: Animatable
 
     public var animationTargets: [Entity] { [self] }
-    public var carriedBlueprints: [(target: Entity, blueprint: any AnimationBlueprint)] { [] }
+    public var carriedBlueprints: [AnimationPair] { [] }
 
     // MARK: Debug
 

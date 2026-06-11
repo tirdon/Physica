@@ -61,10 +61,28 @@ extension Scene {
     }
 
     /// Index labels for the Shift debug overlay — cheap, no geometry flattening.
+    /// Invisible entities (faded to ~0 opacity; groups with nothing visible
+    /// beneath them) get no label. Index paths stay positional, so visible
+    /// siblings keep their numbering.
     public func collectDebugLabels() -> [DebugLabel] {
+        func isVisible(_ entity: Entity) -> Bool {
+            if let style = entity.components[RenderStyleComponent.self] {
+                return style.opacity > 0.001
+            }
+            if let model = entity.components[ModelComponent.self] {
+                return model.opacity > 0.001
+            }
+            if let group = entity as? Group {
+                return group.children.contains { isVisible($0) }
+            }
+            return true  // bare entity — nothing renderable to be invisible
+        }
+
         var labels: [DebugLabel] = []
         func walk(_ entity: Entity, _ path: String) {
-            labels.append(DebugLabel(text: path, worldPosition: entity.center))
+            if isVisible(entity) {
+                labels.append(DebugLabel(text: path, worldPosition: entity.center))
+            }
             if let group = entity as? Group {
                 for (index, child) in group.children.enumerated() {
                     walk(child, "\(path).\(index)")

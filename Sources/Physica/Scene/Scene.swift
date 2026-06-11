@@ -28,6 +28,10 @@ public final class Scene: Identifiable {
     /// Set by the engine via IntersectionObserver; invisible scenes skip updates.
     public internal(set) var isVisible = true
 
+    /// Pair ids whose blueprints `add` already applied — chained descriptors
+    /// carry them along, and `play` must not apply them a second time.
+    private var consumedPairIDs: Set<UInt64> = []
+
     /// Latest pointer state in world coordinates (poll from systems).
     public internal(set) var pointer = PointerState()
     var inputContinuations: [UInt64: AsyncStream<InputEvent>.Continuation] = [:]
@@ -40,9 +44,13 @@ public final class Scene: Identifiable {
 
     // MARK: Entity management (timeline tracks call these)
 
-    func insert(_ entity: Entity) {
+    func insert(_ entity: Entity, at index: Int? = nil) {
         guard !entities.contains(where: { $0 === entity }) else { return }
-        entities.append(entity)
+        if let index, index < entities.count {
+            entities.insert(entity, at: index)  // re-insert after an erase: keep painter's order
+        } else {
+            entities.append(entity)
+        }
         attach(entity)
     }
 
@@ -103,22 +111,39 @@ public final class Scene: Identifiable {
 
         var tracks: [any AnimationTrackProtocol] = [AddEntitiesTrack(entities: entities)]
         for item in items {
-            for (target, blueprint) in item.carriedBlueprints {
+            for pair in item.carriedBlueprints where !consumedPairIDs.contains(pair.id) {
+                consumedPairIDs.insert(pair.id)
                 tracks.append(
-                    blueprint.makeTrack(target: target, duration: 0, offset: 0, easing: .linear, in: self)
+                    pair.blueprint.makeTrack(
+                        target: pair.target, duration: 0, offset: 0, easing: .linear, in: self
+                    )
                 )
             }
         }
 
         let clip = AnimationClip(label: tracks[0].label, tracks: tracks)
         timeline.enqueue(clip)
-        return Animation(pairs: entities.map { ($0, IdentityBlueprint()) }, duration: .zero)
+        return Animation(
+            pairs: entities.map { AnimationPair(target: $0, blueprint: IdentityBlueprint()) },
+            duration: .zero
+        )
     }
 
     /// Plays the given animations together as one clip.
     @discardableResult
     public func play(
         _ items: any Animatable...,
+        for duration: Duration? = nil,
+        easing: Easing? = nil
+    ) -> Animation {
+        playItems(items, for: duration, easing: easing)
+    }
+
+    /// Concrete overload so leading-dot factories resolve:
+    /// `scene.play(.write(title))`, `scene.play(.draw(shape), for: 1.2.s)`.
+    @discardableResult
+    public func play(
+        _ items: Animation...,
         for duration: Duration? = nil,
         easing: Easing? = nil
     ) -> Animation {
@@ -141,26 +166,71 @@ public final class Scene: Identifiable {
         playItems(content().map { $0 }, for: duration, easing: easing)
     }
 
+    /// Builder form with leading duration:
+    /// `scene.play(3.s) { circle.move(to: .center); star.opacity(0.8).shift(-1.j) }`
+    /// ≡ `scene.play(circle.move(to: .center), ..., for: 3.s)`.
+    @discardableResult
+    public func play(
+        _ duration: Duration,
+        easing: Easing? = nil,
+        @AnimationBuilder _ content: () -> [Animation]
+    ) -> Animation {
+        playItems(content().map { $0 }, for: duration, easing: easing)
+    }
+
+    /// Imperative composer — one clip, per-animation durations/offsets:
+    ///
+    ///     scene.play { clip in
+    ///         clip.add(circle.move(to: .center), for: 1.s)
+    ///         clip.add(star.move(to: .center), for: 2.s)
+    ///     }
+    @discardableResult
+    public func play(easing: Easing? = nil, _ build: (ClipComposer) -> Void) -> Animation {
+        let composer = ClipComposer()
+        build(composer)
+        return playItems(composer.animations, for: nil, easing: easing)
+    }
+
     func playItems(_ items: [any Animatable], for duration: Duration?, easing: Easing?) -> Animation {
         var tracks: [any AnimationTrackProtocol] = []
-        var pairs: [(target: Entity, blueprint: any AnimationBlueprint)] = []
+        var pairs: [AnimationPair] = []
         var labels: [String] = []
+        var introduced: [Entity] = []
+        var removals: [(entity: Entity, at: TimeInterval)] = []
 
         for item in items {
             let animation = item as? Animation
-            for (target, blueprint) in item.carriedBlueprints {
-                let resolved = duration ?? animation?.duration ?? blueprint.defaultDuration
-                let track = blueprint.makeTrack(
-                    target: target,
+            for pair in item.carriedBlueprints where !consumedPairIDs.contains(pair.id) {
+                let resolved = duration ?? animation?.duration ?? pair.blueprint.defaultDuration
+                let offset = animation?.offset.interval ?? 0
+                let track = pair.blueprint.makeTrack(
+                    target: pair.target,
                     duration: resolved.interval,
-                    offset: animation?.offset.interval ?? 0,
+                    offset: offset,
                     easing: animation?.easing ?? easing ?? .smooth,
                     in: self
                 )
                 tracks.append(track)
-                pairs.append((target, blueprint))
+                pairs.append(pair)
                 labels.append(track.label)
+                if pair.blueprint.introducesTarget, !introduced.contains(where: { $0 === pair.target }) {
+                    introduced.append(pair.target)
+                }
+                if pair.blueprint.removesTargetAtEnd {
+                    removals.append((pair.target, offset + resolved.interval))
+                }
             }
+        }
+
+        // write/draw introduce their target: add it here if no earlier clip did
+        // (AddEntitiesTrack only claims entities absent at begin, so an explicit
+        // scene.add earlier keeps ownership and this becomes a no-op).
+        if !introduced.isEmpty {
+            tracks.insert(AddEntitiesTrack(entities: introduced), at: 0)
+        }
+        // erase removes its target when its window completes.
+        for removal in removals {
+            tracks.append(RemoveEntityTrack(entity: removal.entity, at: removal.at))
         }
 
         let clip = AnimationClip(label: labels.joined(separator: " + "), tracks: tracks)
@@ -228,6 +298,43 @@ public final class Scene: Identifiable {
     public var debugString: String {
         let entityLines = entities.map { "  " + $0.debugString }
         return "Scene '\(name)' entities(\(entities.count)):\n" + entityLines.joined(separator: "\n")
+    }
+}
+
+/// Collects animations for the composer form of `scene.play { clip in ... }`.
+/// Each `add` keeps its own duration/offset/easing; everything lands in one clip.
+@MainActor
+public final class ClipComposer {
+    var animations: [Animation] = []
+
+    @discardableResult
+    public func add(
+        _ item: any Animatable,
+        for duration: Duration? = nil,
+        offset: Duration? = nil,
+        easing: Easing? = nil
+    ) -> Animation {
+        let base = item as? Animation
+        let animation = Animation(
+            pairs: item.carriedBlueprints,
+            duration: duration ?? base?.duration,
+            offset: offset ?? base?.offset ?? .zero,
+            easing: easing ?? base?.easing
+        )
+        animations.append(animation)
+        return animation
+    }
+
+    /// Concrete overload so leading-dot factories resolve:
+    /// `clip.add(.erase(shape), for: 1.s)`.
+    @discardableResult
+    public func add(
+        _ animation: Animation,
+        for duration: Duration? = nil,
+        offset: Duration? = nil,
+        easing: Easing? = nil
+    ) -> Animation {
+        add(animation as any Animatable, for: duration, offset: offset, easing: easing)
     }
 }
 

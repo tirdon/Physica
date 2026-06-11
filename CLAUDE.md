@@ -1,0 +1,72 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Commands
+
+```sh
+swift test                                  # host tests (macOS) — fast, no GPU/wasm needed
+swift test --filter TimelineTests           # one suite
+swift test --filter "TimelineTests/seek"    # tests whose name contains "seek" in that suite
+
+# WebAssembly bundle → ./js (PackageToJS; the `js` subcommand is required)
+swift package --swift-sdk 6.3-RELEASE-wasm32-unknown-wasip1-threads \
+  --allow-writing-to-directory js js --use-cdn --output js
+
+bun bunserver.js          # serve at http://localhost:3000 (COOP/COEP headers — required)
+bun scripts/smoke.mjs     # headless smoke: runs the wasm bundle under Bun, no GPU; prints the demo timeline
+```
+
+If `swift test` after a wasm build fails with "command … not registered" errors, the shared llbuild state is crossed — `rm .build/build.db` and re-run.
+
+Requirements: Swift 6.3 toolchain + the `6.3-RELEASE-wasm32-unknown-wasip1-threads` Swift SDK, Bun. The dev page must be served by `bunserver.js` (or anything sending COOP `same-origin` / COEP `require-corp`) — wasip1-threads refuses to run unless `crossOriginIsolated === true`.
+
+## Big picture
+
+Pure-Swift-6 SwiftWasm framework: RealityKit-style ECS + Manim-style scripted animation + WebGPU rendering + Hamiltonian rigid-body physics. Two targets with a hard boundary:
+
+- **`Sources/Physica/`** — dependency-free core (never imports Foundation or JavaScriptKit). Builds and tests on macOS; this is where almost all logic and all tests live.
+- **`Sources/PhysicsEngine/`** — wasm executable, everything wrapped in `#if os(WASI)`. Browser glue (`Web/`), the WebGPU renderer (`Render/`), and the demo script (`Demos/PendulumDemo.swift`). It consumes the core through two narrow seams: `Scene.snapshot()` → `SceneSnapshot` (flattened world-space primitives) and the `RenderBackend` protocol. Host tests assert snapshots via `MockRenderBackend`; the renderer is a dumb consumer.
+
+`Math/TypeAtlas.swift` defines `Real` (`Float` on wasm, `Double` on macOS), `Position = SIMD3<Real>`, and the libm shims (`Real.sin` etc. — Apple's simd module doesn't exist on WASI, hence the hand-rolled `Quaternion`/`Matrix4`). Write numeric code against `Real` and keep test assertions tolerance-based.
+
+### Concurrency model (load-bearing, applies everywhere)
+
+The whole mutable object graph (`Entity`, `Scene`, `Timeline`, `Animation`, `Engine`, `System`, web glue) is `@MainActor`; beneath it is a pure `Sendable` value layer (Transform, Path, Mesh, Color, snapshots, event enums). Conventions that exist because of this:
+
+- `Component` is deliberately **not** Sendable (`UpdaterComponent` stores `@MainActor` closures).
+- `Entity.id` is a `nonisolated let UInt64` from a monotonic counter (deterministic for tests; no UUID/Foundation); `==`/`hash` use id only.
+- MainActor classes expose `var debugString: String` instead of `CustomDebugStringConvertible` (which is nonisolated). Tests assert on `debugString`, formatted with the hand-rolled fixed-decimal `fmt()` so Float/Double hosts print identically.
+- AsyncStreams (`Timeline.eventStream()`, `Scene.inputStream()`) carry Sendable enums only.
+
+### Animation = the currency type
+
+Entity methods (`move/shift/scale/rotate/setColor/fade/opacity/morph`) are **deferred descriptors** — they return an `Animation` and mutate nothing. Chained calls accumulate (`star.opacity(0.8).shift(-1.j)` carries both blueprints as `AnimationPair`s); `scene.add` marks pair ids consumed and `play` filters them, which is why a stored handle (`let bob = Circle().move(to: p)`) can be re-animated without double-applying its original move. `scene.add`, `scene.play`, `scene.wait`, `scene.pause(System.self)` all enqueue clips and also return `Animation`, so everything composes. Play forms: variadic `play(_:for:easing:)`, `play(group:)`, builder `play(3.s) { ... }`, and composer `play { clip in clip.add(anim, for: 1.s, offset: ...) }` (one clip, per-animation timing). Duration precedence: `play(for:)` > `animation.duration` > blueprint default (1 s).
+
+Write/draw/erase are **static `Animation` factories**, not entity methods: `scene.play(.write(title))`, `.draw(shape)`, `.erase(shape or title)`. They resolve via a concrete `play(_: Animation...)` overload (leading-dot syntax can't see statics through `any Animatable`). Write/draw blueprints set `introducesTarget`, so `play` auto-adds the entity — no `scene.add` first; erase is the same blueprint `reversed` (value 1→0, fill fades then stroke retracts, last glyph first) plus `removesTargetAtEnd`, which drops a `RemoveEntityTrack` at the pair's end time. Both are scrub-safe: rewinding un-adds / re-inserts at the original root index (painter's order survives). An explicit `scene.add` earlier keeps ownership — the play-clip auto-add only claims entities absent at clip begin.
+
+### Frame and camera
+
+Default camera is `.orthographicFit(extent: 10)`: the longest visible side is 10 world units (aspect 1.6 → 10 × 6.25; portrait → 10·aspect × 10). `move(to: Unit)` resolves against this frame at clip start. Wall defaults sit just inside it (ceiling/floor y ±2.9, sides x ±4.6). Bodies outside **3× the frame** are frozen by `HamiltonianSystem` (no integration, no contacts) — physics integration tests use a big explicit camera (`PhysicsTests.makeWorld`) to stay clear of the cull. The Shift overlay culls labels outside the viewport and skips ~0-opacity entities.
+
+### Scrub-safe timeline contract
+
+The timeline is an append-only clip history. Every track implements `begin(in:)` (idempotent start-value capture) / `apply(at:in:)` (pure in t) / `rewind()`. `seek` forward applies intermediate clips at their end time; backward calls `rewind()` in reverse (so entities added by an `add` clip disappear when you scrub before it). During seek all systems are suspended and one updater pass runs after. **System-driven state (pendulum, physics) intentionally freezes during scrub — it is not replayed.** Any new track type must honor begin/apply/rewind or scrubbing breaks; snap exactly to endpoints at t≤0 / t≥1 (see PathMorphTrack).
+
+Per-frame order in `Scene.update`: timeline.advance → systems (skipped while paused/suspended) → layouts → updaters. Updaters (`entity.updater = {...}` or `entity.bind(\.end, to: bob, \.position)`) also run once after every seek.
+
+### Physics
+
+Hamiltonian/momentum form: state is (transform, p, L); velocities are derived (`ω = R I⁻¹ Rᵀ L`), integrated symplectically at a fixed 1/240 step with an accumulator (`HamiltonianSystem.step(_:in:)` is public for deterministic tests). Contacts are SDF surface-sample based, uniform across sphere/box/ellipsoid/torus. Gotcha: **restitution = min(A, B)** and the default is 0.4, so bounce tests must set restitution explicitly on the static body too. Physics entities should be scene roots.
+
+### JavaScriptKit gotchas (PhysicsEngine only; JSKit pinned to main @453b841)
+
+- Heterogeneous descriptor dicts: `[String: JSValue]` + `.jsValue` — existential `[String: ConvertibleToJSValue]` doesn't conform; mixed literals need explicit `JSValue.number(...)`.
+- `JSObject` dynamic methods need `!` (`global.requestAnimationFrame!`); ambiguous property chains need a type annotation (`let gpu: JSValue = navigator.gpu`).
+- Await promises with the function form `JSPromise(...).value()` — the `.value` property trips sendability from @MainActor.
+- JSClosure bodies: do work inside `MainActor.assumeIsolated { ... }` returning Void, then `return .undefined` outside (JSValue isn't Sendable).
+- The BridgeJS plugin is configured in Package.swift but zero `@JS` is used — delete the plugin line if it ever breaks the build.
+
+## Verifying renderer/web changes
+
+`swift test` covers everything in the core. For anything touching `Render/` or `Web/`, rebuild the wasm bundle and check visually: headless Chrome renders WebGPU on macOS via puppeteer-core with `--headless=new --use-angle=metal --enable-unsafe-webgpu` against the running bun server (screenshot the canvas at chosen timeline times). `bun scripts/smoke.mjs` is the GPU-free sanity check that the bundle still boots.

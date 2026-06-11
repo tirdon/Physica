@@ -5,9 +5,28 @@
 // `AnimationBuilder` blocks. An `Animation` forwards transform access to its first
 // target, which is why `let bob = Circle().move(to: p)` still behaves like the circle.
 
+/// One (target, blueprint) pairing inside an `Animation`. The id survives copies,
+/// so a blueprint consumed by `scene.add` is recognized (and skipped) when a
+/// chained descriptor carries it into a later `play`.
+@MainActor
+public struct AnimationPair {
+    private static var nextID: UInt64 = 1
+
+    public let id: UInt64
+    public let target: Entity
+    public let blueprint: any AnimationBlueprint
+
+    public init(target: Entity, blueprint: any AnimationBlueprint) {
+        self.id = AnimationPair.nextID
+        AnimationPair.nextID += 1
+        self.target = target
+        self.blueprint = blueprint
+    }
+}
+
 @MainActor
 public struct Animation: Animatable, HasTransform {
-    public internal(set) var pairs: [(target: Entity, blueprint: any AnimationBlueprint)]
+    public internal(set) var pairs: [AnimationPair]
     /// nil → resolved by `play(for:)`, else the blueprint default, else 1 s.
     public var duration: Duration?
     /// Start delay within the owning clip.
@@ -15,7 +34,7 @@ public struct Animation: Animatable, HasTransform {
     public var easing: Easing?
 
     public init(
-        pairs: [(target: Entity, blueprint: any AnimationBlueprint)],
+        pairs: [AnimationPair],
         duration: Duration? = nil,
         offset: Duration = .zero,
         easing: Easing? = nil
@@ -45,7 +64,7 @@ public struct Animation: Animatable, HasTransform {
         return unique
     }
 
-    public var carriedBlueprints: [(target: Entity, blueprint: any AnimationBlueprint)] { pairs }
+    public var carriedBlueprints: [AnimationPair] { pairs }
 
     // MARK: HasTransform / components (forwarded to the primary target)
 
@@ -75,8 +94,13 @@ func name(of entity: Entity) -> String {
 // MARK: - Factory surface
 
 public extension Animatable {
+    /// Chains accumulate: `star.opacity(0.8).shift(-1.j)` carries both blueprints.
+    /// Pairs already consumed by `scene.add` are filtered out at play time, so a
+    /// stored handle like `let bob = Circle().move(to: p)` never double-applies.
     private func animation(_ blueprint: any AnimationBlueprint) -> Animation {
-        Animation(pairs: animationTargets.map { (target: $0, blueprint: blueprint) })
+        Animation(pairs: carriedBlueprints + animationTargets.map {
+            AnimationPair(target: $0, blueprint: blueprint)
+        })
     }
 
     /// Animate to an absolute position.
@@ -121,6 +145,12 @@ public extension Animatable {
     @discardableResult
     func fade(to opacity: Real) -> Animation {
         animation(FadeBlueprint(opacity: opacity))
+    }
+
+    /// Alias for `fade(to:)` that reads naturally mid-chain.
+    @discardableResult
+    func opacity(_ value: Real) -> Animation {
+        fade(to: value)
     }
 }
 

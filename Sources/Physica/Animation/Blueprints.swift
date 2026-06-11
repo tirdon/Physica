@@ -8,6 +8,11 @@
 public protocol AnimationBlueprint {
     var defaultDuration: Duration { get }
     var debugLabel: String { get }
+    /// Creation animations (write/draw) introduce their target: `play` adds it
+    /// to the scene if no earlier clip has — no separate `scene.add` needed.
+    var introducesTarget: Bool { get }
+    /// Erase animations remove their target from the scene when their window ends.
+    var removesTargetAtEnd: Bool { get }
 
     func makeTrack(
         target: Entity,
@@ -20,6 +25,8 @@ public protocol AnimationBlueprint {
 
 public extension AnimationBlueprint {
     var defaultDuration: Duration { .seconds(1) }
+    var introducesTarget: Bool { false }
+    var removesTargetAtEnd: Bool { false }
 }
 
 // MARK: - Transform blueprints

@@ -2,7 +2,10 @@
 
 public struct Camera: Sendable {
     public enum Projection: Sendable, Equatable {
-        /// Visible world height; width follows the viewport aspect.
+        /// Longest visible side is `extent`; the short side follows the aspect:
+        /// w > h → extent × extent/aspect, w < h → extent·aspect × extent.
+        case orthographicFit(extent: Real)
+        /// Fixed visible world height; width follows the viewport aspect.
         case orthographic(height: Real)
         case perspective(fovYDegrees: Real)
     }
@@ -14,7 +17,7 @@ public struct Camera: Sendable {
 
     public init(
         transform: Transform = Transform(position: Position(0, 0, 10)),
-        projection: Projection = .orthographic(height: 8),
+        projection: Projection = .orthographicFit(extent: 10),
         near: Real = 0.1,
         far: Real = 100
     ) {
@@ -32,6 +35,10 @@ public struct Camera: Sendable {
 
     public func projectionMatrix(aspect: Real) -> Matrix4 {
         switch projection {
+        case .orthographicFit(let extent):
+            let halfH = Camera.fitHeight(extent: extent, aspect: aspect) / 2
+            let halfW = halfH * aspect
+            return .orthographic(left: -halfW, right: halfW, bottom: -halfH, top: halfH, near: near, far: far)
         case .orthographic(let height):
             let halfH = height / 2
             let halfW = halfH * aspect
@@ -41,10 +48,17 @@ public struct Camera: Sendable {
         }
     }
 
+    /// Height of a fit frame: the longest side equals `extent`.
+    static func fitHeight(extent: Real, aspect: Real) -> Real {
+        aspect >= 1 ? extent / aspect : extent
+    }
+
     /// Visible world rect on the plane z = `z` — the frame `move(to: Unit)` targets.
     public func visibleRect(atZ z: Real = 0, aspect: Real) -> Bounds {
         let height: Real
         switch projection {
+        case .orthographicFit(let extent):
+            height = Camera.fitHeight(extent: extent, aspect: aspect)
         case .orthographic(let h):
             height = h
         case .perspective(let fov):
