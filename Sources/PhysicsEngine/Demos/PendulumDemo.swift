@@ -53,6 +53,7 @@ struct PendulumSystem: System {
 @MainActor
 enum PendulumDemo {
     static func build(_ scene: Scene, font: Font?, formula: TextEntity? = nil) {
+        scene.background = .blackboard
         scene.registerSystem(PendulumSystem.self)
         scene.registerSystem(HamiltonianSystem.self)
 
@@ -85,9 +86,24 @@ enum PendulumDemo {
         scene.pause(PendulumSystem.self)                       // frozen for 1 s, then resumes
         scene.wait(1.5.s)
 
-        // ---- Everything to the bottom edge while the pendulum keeps updating ----
-        scene.play(pivot.move(to: .bottom), string.move(to: .bottom), bob.move(to: .bottom))
+        // ---- Everything to the bottom edge while the pendulum keeps updating.
+        //      Group move: one shared delta, so the string keeps its length
+        //      (separate .move(to:) calls would pin each entity to the edge). ----
+        let pendulum = Group(pivot, string, bob)
+        scene.play(pendulum.move(to: .bottom))
         scene.wait(1.5.s)
+
+        // ---- Contrast: separate moves pin EACH entity to its own corner.
+        //      Save the arrangement first, then restore the capture. ----
+        scene.play(pendulum.saveState())
+        scene.play(
+            pivot.move(to: .topLeft),
+            string.move(to: .bottomLeft),
+            bob.move(to: .bottomRight)
+        )
+        scene.wait(0.8.s)
+        scene.play(pendulum.restoreState())
+        scene.wait(0.7.s)
 
         // ---- Hand off: pendulum fades while its equation unwrites ----
         if let formula {
@@ -109,6 +125,8 @@ enum PendulumDemo {
             scene.play(.write(text))
             // Per-glyph gradient sweep, chalk grain intact.
             scene.play(text.color(mix: [.blue, .teal, .purple]), for: 0.8.s)
+            // Neon chase around the title: one lap, tail catches the head.
+            scene.play(.highlight(text), for: 1.4.s)
             scene.wait(0.5.s)
             title = text
         }

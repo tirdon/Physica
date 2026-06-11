@@ -329,7 +329,7 @@ final class WebGPURenderer: RenderBackend {
             globalsBuffer, 0, JSTypedArray<Float32>(viewProjection.floatArray).jsValue
         )
 
-        let background = snapshot.background
+        let background = snapshot.background.baseColor
         let clearColor: [String: JSValue] = [
             "r": .number(Double(background.r * background.a)),
             "g": .number(Double(background.g * background.a)),

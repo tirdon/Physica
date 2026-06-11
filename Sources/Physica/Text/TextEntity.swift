@@ -135,10 +135,9 @@ public final class TextEntity: Entity {
 public extension Animation {
     /// Stroke-then-fill text reveal: `scene.play(.write(title))`. Adds the entity
     /// to the scene if no earlier clip did — no `scene.add` needed first.
-    /// Duration scales with glyph count unless overridden.
+    /// 1 s by default (the standard blueprint default); pass `for:` to stretch.
     static func write(_ text: TextEntity) -> Animation {
         var animation = Animation(pairs: [AnimationPair(target: text, blueprint: WriteBlueprint())])
-        animation.duration = writeDuration(of: text)
         animation.easing = .linear
         return animation
     }
@@ -149,13 +148,8 @@ public extension Animation {
         var animation = Animation(
             pairs: [AnimationPair(target: text, blueprint: WriteBlueprint(reversed: true))]
         )
-        animation.duration = writeDuration(of: text)
         animation.easing = .linear
         return animation
-    }
-
-    private static func writeDuration(of text: TextEntity) -> Duration {
-        .interval(min(0.6 + 0.35 * TimeInterval(text.textComponent.glyphs.count), 6))
     }
 }
 
@@ -163,7 +157,6 @@ struct WriteBlueprint: AnimationBlueprint {
     /// erase(): same progress mapping run 1 → 0, target removed at the end.
     var reversed = false
 
-    var defaultDuration: Duration { .seconds(2) }
     var debugLabel: String { reversed ? "erase()" : "write()" }
     var introducesTarget: Bool { !reversed }
     var removesTargetAtEnd: Bool { reversed }

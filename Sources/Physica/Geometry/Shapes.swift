@@ -7,12 +7,19 @@ public struct PathComponent: Component {
     public var path: Path
     /// 0...1 — how much of the stroke is revealed (arc-length ordered).
     public var strokeProgress: Real
+    /// 0...1 — trims the stroke's tail: only the span strokeStart...strokeProgress
+    /// is drawn (highlight's chasing loop). 0 = whole stroke from its start.
+    public var strokeStart: Real
     /// 0...1 — multiplies fill alpha (Write fades fill in after the stroke).
     public var fillOpacityFactor: Real
 
-    public init(path: Path = Path(), strokeProgress: Real = 1, fillOpacityFactor: Real = 1) {
+    public init(
+        path: Path = Path(), strokeProgress: Real = 1, strokeStart: Real = 0,
+        fillOpacityFactor: Real = 1
+    ) {
         self.path = path
         self.strokeProgress = strokeProgress
+        self.strokeStart = strokeStart
         self.fillOpacityFactor = fillOpacityFactor
     }
 
@@ -64,10 +71,11 @@ open class PathEntity: Entity {
     }
 
     @discardableResult
-    public func stroke(_ color: Color?, width: Real = 0.04) -> Self {
+    public func stroke(_ color: Color?, width: Real = 0.04, cap: StrokeCap = .square) -> Self {
         var style = self.style
         style.strokeColor = color
         style.strokeWidth = width
+        style.cap = cap
         self.style = style
         return self
     }

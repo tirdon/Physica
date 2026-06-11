@@ -47,6 +47,9 @@ enum App {
         do {
             let renderer = try await WebGPURenderer.create(canvasID: "main")
             engine.bind(renderer, to: scene)
+            _ = console.log(
+                "Physica: scene size", Double(scene.size.x), "×", Double(scene.size.y)
+            )
 
             let canvas: JSValue = JSObject.global.document.getElementById("main")
             self.controls = PlaybackControls(scene: scene)

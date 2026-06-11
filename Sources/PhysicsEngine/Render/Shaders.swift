@@ -1,7 +1,8 @@
 // WGSL shaders. One module, five entry-point pairs sharing the same bind layout:
 // group 0 = per-frame globals, group 1 = per-draw uniforms (256-byte dynamic slots).
-// draw.params is the free vec4: paths use x = texture (0 flat / 1 chalk / 2 pencil);
-// meshes use x = shading (0 lambert / 1 toon), y = toon bands, z = outline inflate.
+// draw.params is the free vec4: paths use x = texture (0 flat / 1 chalk / 2 pencil /
+// 3 blackboard backdrop); meshes use x = shading (0 lambert / 1 toon), y = toon
+// bands, z = outline inflate.
 
 enum Shaders {
     static let module = """
@@ -24,6 +25,18 @@ enum Shaders {
         return fract(q.x * q.y);
     }
 
+    // Smooth 2D value noise (bilinear hash blend) — blackboard smudge.
+    fn vnoise(p: vec2<f32>) -> f32 {
+        let cell = floor(p);
+        let f = fract(p);
+        let u = f * f * (3.0 - 2.0 * f);
+        let a = hash21(cell);
+        let b = hash21(cell + vec2<f32>(1.0, 0.0));
+        let c = hash21(cell + vec2<f32>(0.0, 1.0));
+        let d = hash21(cell + vec2<f32>(1.0, 1.0));
+        return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+    }
+
     // ---- Flat 2D (path stencil/cover/stroke) ----
 
     struct FlatOut {
@@ -44,6 +57,15 @@ enum Shaders {
     @fragment
     fn fs_color(in: FlatOut) -> @location(0) vec4<f32> {
         var alpha = draw.color.a;
+        if (draw.params.x > 2.5) {
+            // Blackboard: low-frequency eraser smudge + fine chalk dust,
+            // brightening up from the slate tint. Opaque backdrop.
+            let smudge = 0.6 * vnoise(in.world * 0.45)
+                       + 0.4 * vnoise(in.world * 1.6 + vec2<f32>(13.7, 7.1));
+            let dust = hash21(floor(in.world * 240.0));
+            let lift = 0.05 * smudge * smudge + 0.012 * dust;
+            return vec4<f32>(draw.color.rgb + vec3<f32>(lift), 1.0);
+        }
         if (draw.params.x > 1.5) {
             // Pencil: fine graphite striations along one diagonal + grain.
             let dir = vec2<f32>(0.876, 0.482);   // normalized ~29° hatch

@@ -16,13 +16,19 @@ public final class Scene: Identifiable {
     let systems = SystemRegistry()
 
     public var camera = Camera()
-    public var background = Color.background
+    public var background: SceneBackground = .color(.background)
     /// Width/height of the bound viewport; kept current by the engine.
     public var viewportAspect: Real = 1.6
 
     /// Visible world rect used to resolve `move(to: Unit)`.
     public var frameBounds: Bounds {
         camera.visibleRect(atZ: 0, aspect: viewportAspect)
+    }
+
+    /// World-space size of the camera's visible frame — what `move(to: Unit)`
+    /// resolves against (10 × 6.25 at the default fit-10 camera, aspect 1.6).
+    public var size: SIMD2<Real> {
+        SIMD2(frameBounds.size.x, frameBounds.size.y)
     }
 
     /// Set by the engine via IntersectionObserver; invisible scenes skip updates.

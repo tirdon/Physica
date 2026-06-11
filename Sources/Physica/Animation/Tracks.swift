@@ -264,6 +264,11 @@ final class RemoveEntityTrack: AnimationTrackProtocol {
     }
 
     func apply(at clipTime: TimeInterval, in scene: Scene) {
+        // Targets introduced by this same clip (highlight borders) aren't
+        // roots yet at begin — resolve once the AddEntitiesTrack ran.
+        if rootIndex == nil {
+            rootIndex = scene.entities.firstIndex { $0 === entity }
+        }
         guard let index = rootIndex else { return }
         if clipTime >= offset {
             scene.detach(entity)

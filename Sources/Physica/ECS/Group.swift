@@ -28,7 +28,9 @@ open class Group: Entity, HasHierarchy {
     open func addChild(_ entity: Entity) {
         guard entity !== self, entity.parent !== self else { return }
         entity.parent = self
-        entity.scene = scene
+        // Transient bags (`Group(a, b).move(to: .bottom)`) never join a scene —
+        // don't wipe the scene pointer of members that are already scene roots.
+        if scene != nil { entity.scene = scene }
         children.append(entity)
         childrenDidChange()
     }

@@ -59,6 +59,41 @@ public struct Path: Sendable, Equatable {
         ])
     }
 
+    /// Axis-aligned rounded rectangle; each corner is a 90° arc as one cubic.
+    /// Starts on the bottom edge before the bottom-right corner, runs CCW.
+    public static func roundedRect(
+        width: Real, height: Real, cornerRadius: Real, center: SIMD2<Real> = .zero
+    ) -> Path {
+        let w = width / 2
+        let h = height / 2
+        let r = Swift.max(0, Swift.min(cornerRadius, Swift.min(w, h)))
+        guard r > 1e-6 else { return rect(width: width, height: height, center: center) }
+        let k = r * 0.55228475
+        let c = center
+        let contour = Contour(
+            start: SIMD2(c.x + w - r, c.y - h),
+            segments: [
+                .curve(control1: SIMD2(c.x + w - r + k, c.y - h),
+                       control2: SIMD2(c.x + w, c.y - h + r - k),
+                       to: SIMD2(c.x + w, c.y - h + r)),
+                .line(to: SIMD2(c.x + w, c.y + h - r)),
+                .curve(control1: SIMD2(c.x + w, c.y + h - r + k),
+                       control2: SIMD2(c.x + w - r + k, c.y + h),
+                       to: SIMD2(c.x + w - r, c.y + h)),
+                .line(to: SIMD2(c.x - w + r, c.y + h)),
+                .curve(control1: SIMD2(c.x - w + r - k, c.y + h),
+                       control2: SIMD2(c.x - w, c.y + h - r + k),
+                       to: SIMD2(c.x - w, c.y + h - r)),
+                .line(to: SIMD2(c.x - w, c.y - h + r)),
+                .curve(control1: SIMD2(c.x - w, c.y - h + r - k),
+                       control2: SIMD2(c.x - w + r - k, c.y - h),
+                       to: SIMD2(c.x - w + r, c.y - h)),
+            ],
+            isClosed: true
+        )
+        return Path(contours: [contour])
+    }
+
     public static func polygon(points: [SIMD2<Real>], closed: Bool = true) -> Path {
         guard let first = points.first else { return Path() }
         let segments = points.dropFirst().map { Segment.line(to: $0) }

@@ -41,6 +41,12 @@ enum GeometryUploader {
     static func pack(_ snapshot: SceneSnapshot) -> FramePacket {
         var packet = FramePacket()
 
+        // Blackboard backdrop first: a fullscreen flat quad (depth off) that
+        // meshes overdraw and paths paint over.
+        if case .blackboard(let tint) = snapshot.background {
+            appendBlackboard(tint: tint, frame: snapshot.frame, into: &packet)
+        }
+
         // Meshes first: they depth-test; 2D paths paint over in snapshot order.
         for primitive in snapshot.primitives {
             if case .mesh(let mesh) = primitive {
@@ -58,8 +64,9 @@ enum GeometryUploader {
     // MARK: Uniform slots
 
     /// `params` is the shader's free vec4: paths use x = texture mode
-    /// (0 flat / 1 chalk / 2 pencil); meshes use x = shading (0 lambert /
-    /// 1 toon), y = toon bands, z = outline thickness (vs_outline inflate).
+    /// (0 flat / 1 chalk / 2 pencil / 3 blackboard backdrop); meshes use
+    /// x = shading (0 lambert / 1 toon), y = toon bands, z = outline
+    /// thickness (vs_outline inflate).
     private static func appendUniformSlot(
         model: Matrix4, color: Color, params: [Float32] = [0, 0, 0, 0],
         into packet: inout FramePacket
@@ -79,6 +86,33 @@ enum GeometryUploader {
         case .chalk: return [1, 0, 0, 0]
         case .pencil: return [2, 0, 0, 0]
         }
+    }
+
+    // MARK: Background
+
+    /// Fullscreen quad through the flat color pipeline with params.x = 3
+    /// (blackboard grain). The frame is the camera's visible rect at z = 0;
+    /// 8% overscan so live-resize aspect drift never exposes the clear edge.
+    private static func appendBlackboard(tint: Color, frame: Bounds, into packet: inout FramePacket) {
+        let slot = appendUniformSlot(model: .identity, color: tint, params: [3, 0, 0, 0], into: &packet)
+        let center = frame.center
+        let halfW = max(frame.size.x, 1) * 0.54
+        let halfH = max(frame.size.y, 1) * 0.54
+        let start = packet.flatVertices.count / 3
+        let corners = [
+            Position(center.x - halfW, center.y - halfH, 0),
+            Position(center.x + halfW, center.y - halfH, 0),
+            Position(center.x + halfW, center.y + halfH, 0),
+            Position(center.x - halfW, center.y - halfH, 0),
+            Position(center.x + halfW, center.y + halfH, 0),
+            Position(center.x - halfW, center.y + halfH, 0),
+        ]
+        for corner in corners {
+            appendFlat(corner, into: &packet)
+        }
+        packet.commands.append(DrawCommand(
+            kind: .stroke, vertexStart: start, vertexCount: 6, uniformOffset: slot
+        ))
     }
 
     // MARK: Meshes
@@ -141,7 +175,7 @@ enum GeometryUploader {
                 appendFill(path, color: color, into: &packet)
             }
         }
-        if let stroke = path.style.stroke, path.strokeProgress > 0.0001 {
+        if let stroke = path.style.stroke, path.strokeProgress - path.strokeStart > 0.0001 {
             appendStroke(path, color: stroke, into: &packet)
         }
     }
@@ -202,12 +236,9 @@ enum GeometryUploader {
     }
 
     private static func appendStroke(_ path: PathPrimitive, color: Color, into packet: inout FramePacket) {
-        let slot = appendUniformSlot(
-            model: .identity, color: color, params: params(for: path.style.texture), into: &packet
-        )
         let halfWidth = max(path.style.strokeWidth, 0.001) / 2
 
-        // Count segments across all contours so strokeProgress caps globally
+        // Count segments across all contours so the trim window maps globally
         // in draw order (the Write/draw reveal contract).
         var totalSegments = 0
         for contour in path.contours where contour.points.count >= 2 {
@@ -215,56 +246,108 @@ enum GeometryUploader {
         }
         guard totalSegments > 0 else { return }
 
-        // Continuous reveal: full quads plus a fractional tip on the boundary
-        // segment, so draw grows and erase retracts smoothly along a side.
+        // Continuous trim window [strokeStart, strokeProgress]: whole quads
+        // plus fractional ends on the boundary segments, so draw grows, erase
+        // retracts, and the highlight tail chases smoothly along a side.
         // Integer-only capping pops whole segments — invisible on a flattened
         // circle (~100 segments), glaring on a 3-segment triangle.
-        let progress = min(max(path.strokeProgress, 0), 1)
-        let exact = Real(totalSegments) * progress
-        var fullSegments = min(Int(exact.rounded(.down)), totalSegments)
-        var tipFraction = exact - Real(fullSegments)
-        if progress >= 0.9999 {
-            fullSegments = totalSegments
-            tipFraction = 0
-        }
-        guard fullSegments > 0 || tipFraction > 1e-4 else { return }
+        let head = min(max(path.strokeProgress, 0), 1)
+        let tail = min(max(path.strokeStart, 0), head)
+        var endExact = Real(totalSegments) * head
+        var startExact = Real(totalSegments) * tail
+        if head >= 0.9999 { endExact = Real(totalSegments) }
+        if tail <= 0.0001 { startExact = 0 }
+        guard endExact - startExact > 1e-4 else { return }
 
-        let start = packet.flatVertices.count / 3
-        var emitted = 0
-        outer: for contour in path.contours where contour.points.count >= 2 {
-            let points = contour.points
-            let segmentCount = points.count - 1 + (contour.isClosed ? 1 : 0)
-            for segment in 0..<segmentCount {
-                let a = points[segment]
-                let b = points[(segment + 1) % points.count]
-                if emitted < fullSegments {
-                    appendStrokeQuad(from: a, to: b, halfWidth: halfWidth, into: &packet)
-                    emitted += 1
-                    continue
+        let cap = path.style.cap
+        func emitQuads(halfWidth: Real) -> (start: Int, count: Int) {
+            let start = packet.flatVertices.count / 3
+            var segmentIndex = 0
+            outer: for contour in path.contours where contour.points.count >= 2 {
+                let points = contour.points
+                let segmentCount = points.count - 1 + (contour.isClosed ? 1 : 0)
+                var runActive = false  // round: disc at a run's first point, then at every end
+                for segment in 0..<segmentCount {
+                    let lo = startExact - Real(segmentIndex)
+                    let hi = endExact - Real(segmentIndex)
+                    segmentIndex += 1
+                    if hi <= 1e-4 { break outer }
+                    if lo >= 1 { continue }
+                    let from = max(lo, 0)
+                    let to = min(hi, 1)
+                    guard to - from > 1e-4 else { continue }
+                    let a = points[segment]
+                    let b = points[(segment + 1) % points.count]
+                    let quadStart = a + (b - a) * from
+                    let quadEnd = a + (b - a) * to
+                    appendStrokeQuad(
+                        from: quadStart, to: quadEnd, halfWidth: halfWidth,
+                        extendEnds: cap == .square, into: &packet
+                    )
+                    if cap == .round {
+                        if !runActive {
+                            appendDisc(center: quadStart, radius: halfWidth, into: &packet)
+                        }
+                        appendDisc(center: quadEnd, radius: halfWidth, into: &packet)
+                    }
+                    runActive = true
                 }
-                if tipFraction > 1e-4 {
-                    let tip = a + (b - a) * tipFraction
-                    appendStrokeQuad(from: a, to: tip, halfWidth: halfWidth, into: &packet)
-                }
-                break outer
             }
+            return (start, packet.flatVertices.count / 3 - start)
         }
-        let count = packet.flatVertices.count / 3 - start
+
+        if path.style.neon {
+            // Neon tube: stacked translucent halos approximate a soft glow
+            // falloff (flat quads can't gradient across the stroke), then a
+            // hot, slightly whitened core — all over the same trim window.
+            let halos: [(width: Real, alpha: Float32)] = [(4.5, 0.10), (2.4, 0.22)]
+            for halo in halos {
+                let slot = appendUniformSlot(
+                    model: .identity, color: color.with(opacity: halo.alpha), into: &packet
+                )
+                let range = emitQuads(halfWidth: halfWidth * halo.width)
+                if range.count > 0 {
+                    packet.commands.append(DrawCommand(
+                        kind: .stroke, vertexStart: range.start, vertexCount: range.count,
+                        uniformOffset: slot
+                    ))
+                }
+            }
+            var coreColor = Color.lerp(color, .white, 0.35)
+            coreColor.a = color.a
+            let coreSlot = appendUniformSlot(model: .identity, color: coreColor, into: &packet)
+            let core = emitQuads(halfWidth: halfWidth)
+            if core.count > 0 {
+                packet.commands.append(DrawCommand(
+                    kind: .stroke, vertexStart: core.start, vertexCount: core.count,
+                    uniformOffset: coreSlot
+                ))
+            }
+            return
+        }
+
+        let slot = appendUniformSlot(
+            model: .identity, color: color, params: params(for: path.style.texture), into: &packet
+        )
+        let range = emitQuads(halfWidth: halfWidth)
+        guard range.count > 0 else { return }
         packet.commands.append(DrawCommand(
-            kind: .stroke, vertexStart: start, vertexCount: count, uniformOffset: slot
+            kind: .stroke, vertexStart: range.start, vertexCount: range.count, uniformOffset: slot
         ))
     }
 
     private static func appendStrokeQuad(
-        from a: Position, to b: Position, halfWidth: Real, into packet: inout FramePacket
+        from a: Position, to b: Position, halfWidth: Real, extendEnds: Bool,
+        into packet: inout FramePacket
     ) {
         let delta = SIMD2<Real>(b.x - a.x, b.y - a.y)
         let length = (delta.x * delta.x + delta.y * delta.y).squareRoot()
         guard length > 1e-7 else { return }
         let dir = delta / length
         let normal = SIMD2<Real>(-dir.y, dir.x) * halfWidth
-        // Square caps: extend both ends by halfWidth so adjacent quads seal joints.
-        let cap = dir * halfWidth
+        // Square caps extend both ends by halfWidth so adjacent quads seal
+        // joints; butt/round leave the ends exact (round seals with discs).
+        let cap = extendEnds ? dir * halfWidth : SIMD2<Real>(0, 0)
         let a2 = SIMD2<Real>(a.x, a.y) - cap
         let b2 = SIMD2<Real>(b.x, b.y) + cap
 
@@ -279,6 +362,23 @@ enum GeometryUploader {
         appendFlat(v1, into: &packet)
         appendFlat(v3, into: &packet)
         appendFlat(v2, into: &packet)
+    }
+
+    /// Round-cap/joint disc: a small triangle fan around `center`.
+    private static func appendDisc(center: Position, radius: Real, into packet: inout FramePacket) {
+        let segments = 10
+        var previous = SIMD2<Real>(center.x + radius, center.y)
+        for index in 1...segments {
+            let angle = Real(index) / Real(segments) * 2 * Real.pi
+            let next = SIMD2<Real>(
+                center.x + radius * Real.cos(angle),
+                center.y + radius * Real.sin(angle)
+            )
+            appendFlat(center, into: &packet)
+            appendFlat(Position(previous.x, previous.y, center.z), into: &packet)
+            appendFlat(Position(next.x, next.y, center.z), into: &packet)
+            previous = next
+        }
     }
 
     private static func appendFlat(_ point: Position, into packet: inout FramePacket) {

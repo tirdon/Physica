@@ -175,4 +175,104 @@ struct AnimationTests {
         let animation = entity.move(to: Position(1, 1, 0))
         #expect(animation.debugString == "Animation[bob.move(to: (1.000, 1.000, 0.000))]")
     }
+
+    @Test func separateUnitMovesPinEachEntityIndividually() {
+        let scene = Scene()
+        let a = Circle(radius: 0.5)
+        a.position = Position(0, 2, 0)
+        let b = Circle(radius: 0.5)
+        b.position = Position(2, 0, 0)
+        scene.add(a, b)
+        scene.play(a.move(to: .bottom), b.move(to: .bottom), for: 1.s)
+        scene.update(deltaTime: 1.2)
+
+        // No implicit grouping: each entity's own bounds land on the edge.
+        let frame = scene.frameBounds
+        #expect(approx(a.position.y, frame.min.y + 1, tolerance: 1e-3))
+        #expect(approx(b.position.y, frame.min.y + 1, tolerance: 1e-3))
+        #expect(approx(a.position.x, 0))
+        #expect(approx(b.position.x, 2))
+    }
+
+    @Test func groupMovePreservesRelativeLayout() {
+        let scene = Scene()
+        let a = Circle(radius: 0.5)
+        a.position = Position(0, 2, 0)
+        let b = Circle(radius: 0.5)
+        scene.add(a, b)
+        scene.play(Group(a, b).move(to: .bottom), for: 1.s)
+        scene.update(deltaTime: 1.2)
+
+        // One rigid unit: the union's bottom sits at the edge + padding and
+        // the members keep their relative offset (string length survives).
+        #expect(approx(a.position.y - b.position.y, 2))
+        #expect(approx(a.position.x, 0))
+        let frame = scene.frameBounds
+        #expect(approx(b.position.y - 0.5, frame.min.y + 0.5, tolerance: 1e-3))
+
+        // The transient bag never wiped the members' scene membership.
+        #expect(a.scene === scene)
+        #expect(b.scene === scene)
+
+        // Scrubbing back restores both starts.
+        scene.seek(to: 0)
+        #expect(approx(a.position.y, 2))
+        #expect(approx(b.position.y, 0))
+    }
+
+    @Test func groupBagAcceptsStoredAnimationHandles() {
+        let scene = Scene()
+        let circle = Circle(radius: 0.5)
+        let handle = circle.move(to: Position(0, 1, 0))  // spec-style stored handle
+        scene.add(handle)
+        let group = Group(handle)
+        #expect(group.children.count == 1)
+        #expect(group.children[0] === circle)
+    }
+
+    @Test func saveAndRestoreStateRoundTrip() {
+        let scene = Scene()
+        let a = Circle(radius: 0.5)
+        a.position = Position(0, 1, 0)
+        let b = Circle(radius: 0.5)
+        b.position = Position(1, 0, 0)
+        scene.add(a, b)
+        let bag = Group(a, b)
+
+        scene.wait(0.5.s)
+        scene.play(bag.saveState())                       // 0-duration capture at 0.5
+        scene.play(a.shift(2.i), b.shift(-1.j), for: 1.s) // scatter [0.5, 1.5]
+        scene.wait(0.5.s)
+        scene.play(bag.restoreState(), for: 1.s)          // [2.0, 3.0]
+
+        scene.update(deltaTime: 1.0)                      // mid-scatter
+        #expect(approx(a.position.x, 1, tolerance: 0.4))
+        scene.update(deltaTime: 0.7)                      // scattered, mid-wait
+        #expect(approx(a.position.x, 2))
+        #expect(approx(b.position.y, -1))
+
+        scene.update(deltaTime: 1.5)                      // restore done
+        #expect(approx(a.position.x, 0))
+        #expect(approx(a.position.y, 1))
+        #expect(approx(b.position.x, 1))
+        #expect(approx(b.position.y, 0))
+
+        // Scrubbing into the scatter window shows the scattered state again;
+        // scrubbing before the save removes the capture component.
+        scene.seek(to: 1.5)
+        #expect(approx(a.position.x, 2))
+        scene.seek(to: 0)
+        #expect(a.components[SavedStateComponent.self] == nil)
+    }
+
+    @Test func restoreWithoutSaveIsANoOp() {
+        let scene = Scene()
+        let circle = Circle(radius: 0.5)
+        circle.position = Position(1, 1, 0)
+        scene.add(circle)
+        scene.play(circle.restoreState(), for: 1.s)
+        scene.update(deltaTime: 1.2)
+        #expect(approx(circle.position.x, 1))
+        #expect(approx(circle.position.y, 1))
+    }
 }

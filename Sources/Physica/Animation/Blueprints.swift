@@ -85,6 +85,79 @@ struct MoveToUnitBlueprint: AnimationBlueprint {
         if direction.y < 0 { destination.y = frame.min.y + padding + extents.y }
         return destination
     }
+
+}
+
+// MARK: - Grouped unit move
+
+public extension Group {
+    /// Bag builder that also accepts stored animation handles
+    /// (`let bob = Circle().move(to: p)`): each item contributes its targets.
+    convenience init(_ items: any Animatable...) {
+        var members: [Entity] = []
+        for item in items {
+            for target in item.animationTargets where !members.contains(where: { $0 === target }) {
+                members.append(target)
+            }
+        }
+        self.init(children: members)
+    }
+
+    /// Moves the group's members to a frame edge **as one rigid unit**: the
+    /// union of their bounds is pinned to the edge and every member shifts by
+    /// the same delta, so relative layout (a pendulum's string length) survives:
+    /// `scene.play(Group(pivot, string, bob).move(to: .bottom))`.
+    /// The group can be a transient bag — it never needs to join the scene.
+    /// Separate `entity.move(to:)` calls still pin each entity individually.
+    @discardableResult
+    func move(to unit: Unit, padding: Real = 0.5) -> Animation {
+        let blueprint = GroupedMoveToUnitBlueprint(members: children, unit: unit, padding: padding)
+        return Animation(pairs: children.map { AnimationPair(target: $0, blueprint: blueprint) })
+    }
+}
+
+struct GroupedMoveToUnitBlueprint: AnimationBlueprint {
+    let members: [Entity]
+    let unit: Unit
+    let padding: Real
+    var debugLabel: String { "move(to: .\(unit))" }
+
+    func makeTrack(
+        target: Entity, duration: TimeInterval, offset: TimeInterval, easing: Easing, in scene: Scene
+    ) -> any AnimationTrackProtocol {
+        PropertyTrack<Position>(
+            target: target, duration: duration, offset: offset, easing: easing,
+            label: "\(name(of: target)).\(debugLabel)",
+            read: { $0.position },
+            write: { $0.position = $1 },
+            // Each member's track resolves at clip begin — before any apply
+            // has moved anything — so all members compute the same delta.
+            resolveEnd: { [weak scene] _, start in
+                guard let scene else { return start }
+                return start + Self.delta(members: members, unit: unit, padding: padding, frame: scene.frameBounds)
+            }
+        )
+    }
+
+    /// Delta that pins the union of the members' bounds to the frame edge.
+    static func delta(members: [Entity], unit: Unit, padding: Real, frame: Bounds) -> Position {
+        var union = Bounds.empty
+        for member in members {
+            union = union.union(member.worldBounds)
+        }
+        var delta = Position(0, 0, 0)
+        if unit == .center {
+            delta = Position(frame.center.x - union.center.x, frame.center.y - union.center.y, 0)
+        } else {
+            let direction = unit.vector
+            let extents = union.size / 2
+            if direction.x > 0 { delta.x = frame.max.x - padding - extents.x - union.center.x }
+            if direction.x < 0 { delta.x = frame.min.x + padding + extents.x - union.center.x }
+            if direction.y > 0 { delta.y = frame.max.y - padding - extents.y - union.center.y }
+            if direction.y < 0 { delta.y = frame.min.y + padding + extents.y - union.center.y }
+        }
+        return delta
+    }
 }
 
 struct ShiftBlueprint: AnimationBlueprint {

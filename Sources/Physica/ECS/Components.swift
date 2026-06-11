@@ -132,29 +132,51 @@ public enum PathTexture: Sendable, Equatable {
     case pencil
 }
 
+/// Stroke end-cap (and joint-sealing) style.
+public enum StrokeCap: Sendable, Equatable {
+    /// Flat end exactly at the path end; shallow joint gaps may show.
+    case butt
+    /// Ends extended by half the stroke width — seals joints (the default).
+    case square
+    /// Discs at ends and joints — best where line ends are visible
+    /// (neon highlight, open Lines, trimmed reveals).
+    case round
+}
+
 /// Fill/stroke styling consumed by the snapshot pass.
 public struct RenderStyleComponent: Component {
     public var color: Color
     public var strokeColor: Color?
+    /// Normalized 0...1: 1 = 10% of the frame's longest side. At the default
+    /// fit-10 camera that is exactly 1 world unit, so values read like world
+    /// units there — but strokes scale with the frame if the camera changes.
     public var strokeWidth: Real
+    public var cap: StrokeCap
     public var isFilled: Bool
     public var opacity: Real
     public var texture: PathTexture
+    /// Neon tube look: the renderer adds a wide translucent glow pass under
+    /// the stroke and whitens its core (highlight borders).
+    public var neon: Bool
 
     public init(
         color: Color = .white,
         strokeColor: Color? = nil,
         strokeWidth: Real = 0.04,
+        cap: StrokeCap = .square,
         isFilled: Bool = true,
         opacity: Real = 1,
-        texture: PathTexture = .flat
+        texture: PathTexture = .flat,
+        neon: Bool = false
     ) {
         self.color = color
         self.strokeColor = strokeColor
         self.strokeWidth = strokeWidth
+        self.cap = cap
         self.isFilled = isFilled
         self.opacity = opacity
         self.texture = texture
+        self.neon = neon
     }
 
     public var debugString: String {

@@ -195,4 +195,39 @@ struct SnapshotTests {
         #expect(approx(square.size.x, 10))
         #expect(approx(square.size.y, 10))
     }
+
+    @Test func backgroundFlowsToSnapshot() {
+        let scene = Scene()
+        #expect(scene.snapshot().background == .color(.background))
+
+        scene.background = .blackboard
+        let snapshot = scene.snapshot()
+        #expect(snapshot.background == .blackboard(tint: Color(hex: 0x1C2A24)))
+        #expect(snapshot.background.baseColor == Color(hex: 0x1C2A24))
+        // The frame rides along so the renderer can size the backdrop quad.
+        #expect(approx(snapshot.frame.size.x, scene.frameBounds.size.x))
+    }
+
+    @Test func strokeTrimAndNeonFlowToPathPrimitive() {
+        let scene = Scene()
+        let shape = Circle(radius: 1).stroke(.teal, width: 0.05, cap: .round)
+        var style = shape.style
+        style.neon = true
+        shape.style = style
+        var component = shape.components[PathComponent.self]!
+        component.strokeProgress = 0.8
+        component.strokeStart = 0.3
+        shape.components[PathComponent.self] = component
+        scene.add(shape)
+        scene.update(deltaTime: 0.016)
+
+        guard case .path(let primitive) = scene.snapshot().primitives[0] else {
+            Issue.record("expected a path primitive")
+            return
+        }
+        #expect(primitive.style.neon)
+        #expect(primitive.style.cap == .round)
+        #expect(approx(primitive.strokeProgress, 0.8))
+        #expect(approx(primitive.strokeStart, 0.3))
+    }
 }

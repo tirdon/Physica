@@ -1,19 +1,46 @@
 // SceneSnapshot — the renderer-facing flattening of a scene. Core stays headless;
 // any RenderBackend (WebGPU on wasm, mocks in tests) consumes these value types.
 
+/// Scene backdrop: a flat clear color, or a blackboard slate whose procedural
+/// smudge-and-dust texture the renderer paints as a fullscreen pass behind
+/// everything (`scene.background = .blackboard`).
+public enum SceneBackground: Sendable, Equatable {
+    case color(Color)
+    case blackboard(tint: Color)
+
+    /// Classic deep-green slate.
+    public static var blackboard: SceneBackground { .blackboard(tint: Color(hex: 0x1C2A24)) }
+
+    /// The clear color (the blackboard texture brightens up from this base).
+    public var baseColor: Color {
+        switch self {
+        case .color(let color): return color
+        case .blackboard(let tint): return tint
+        }
+    }
+}
+
 public struct PathStyle: Sendable, Equatable {
     /// nil → no fill pass.
     public var fill: Color?
     /// nil → no stroke pass.
     public var stroke: Color?
     public var strokeWidth: Real
+    public var cap: StrokeCap
     public var texture: PathTexture
+    /// Neon tube: wide translucent glow pass under a whitened core stroke.
+    public var neon: Bool
 
-    public init(fill: Color?, stroke: Color?, strokeWidth: Real, texture: PathTexture = .flat) {
+    public init(
+        fill: Color?, stroke: Color?, strokeWidth: Real, cap: StrokeCap = .square,
+        texture: PathTexture = .flat, neon: Bool = false
+    ) {
         self.fill = fill
         self.stroke = stroke
         self.strokeWidth = strokeWidth
+        self.cap = cap
         self.texture = texture
+        self.neon = neon
     }
 }
 
@@ -28,6 +55,8 @@ public struct PathPrimitive: Sendable {
     public var style: PathStyle
     /// 0...1 — stroke reveal cap (Write/draw animations).
     public var strokeProgress: Real
+    /// 0...1 — tail trim; only strokeStart...strokeProgress is stroked.
+    public var strokeStart: Real = 0
     /// 0...1 — extra fill alpha factor (Write fade-in).
     public var fillOpacityFactor: Real
 
@@ -81,7 +110,9 @@ public struct CameraState: Sendable {
 public struct SceneSnapshot: Sendable {
     public var primitives: [RenderPrimitive]
     public var camera: CameraState
-    public var background: Color
+    public var background: SceneBackground
+    /// The camera's visible rect at z = 0 (the blackboard pass covers it).
+    public var frame: Bounds
     public var time: TimeInterval
     public var debugLabels: [DebugLabel]
 
@@ -106,10 +137,17 @@ extension Scene {
         var primitives: [RenderPrimitive] = []
         var labels: [DebugLabel]? = includeDebugLabels ? [] : nil
 
+        // strokeWidth is normalized (1 = 10% of the frame's longest side);
+        // primitives carry resolved world units — the renderer stays dumb.
+        let frame = frameBounds
+        var strokeScale = 0.1 * Swift.max(frame.size.x, frame.size.y)
+        if strokeScale <= 0 { strokeScale = 1 }
+
         for (index, root) in entities.enumerated() {
             collect(
                 entity: root,
                 indexPath: "\(index)",
+                strokeScale: strokeScale,
                 into: &primitives,
                 labels: &labels
             )
@@ -123,6 +161,7 @@ extension Scene {
                 position: camera.transform.position
             ),
             background: background,
+            frame: frameBounds,
             time: timeline.currentTime,
             debugLabels: labels ?? []
         )
@@ -131,6 +170,7 @@ extension Scene {
     private func collect(
         entity: Entity,
         indexPath: String,
+        strokeScale: Real,
         into primitives: inout [RenderPrimitive],
         labels: inout [DebugLabel]?
     ) {
@@ -153,10 +193,13 @@ extension Scene {
                     style: PathStyle(
                         fill: style.isFilled ? style.color.with(opacity: opacity) : nil,
                         stroke: style.strokeColor.map { $0.with(opacity: opacity) },
-                        strokeWidth: style.strokeWidth,
-                        texture: style.texture
+                        strokeWidth: min(max(style.strokeWidth, 0), 1) * strokeScale,
+                        cap: style.cap,
+                        texture: style.texture,
+                        neon: style.neon
                     ),
                     strokeProgress: pathComponent.strokeProgress,
+                    strokeStart: pathComponent.strokeStart,
                     fillOpacityFactor: pathComponent.fillOpacityFactor
                 )))
             }
@@ -207,7 +250,8 @@ extension Scene {
                     style: PathStyle(
                         fill: style.isFilled ? fillColor.with(opacity: glyphOpacity) : nil,
                         stroke: strokeColor.with(opacity: glyphOpacity),
-                        strokeWidth: style.strokeWidth,
+                        strokeWidth: min(max(style.strokeWidth, 0), 1) * strokeScale,
+                        cap: style.cap,
                         texture: style.texture
                     ),
                     strokeProgress: factors.stroke,
@@ -221,6 +265,7 @@ extension Scene {
                 collect(
                     entity: child,
                     indexPath: "\(indexPath).\(childIndex)",
+                    strokeScale: strokeScale,
                     into: &primitives,
                     labels: &labels
                 )
