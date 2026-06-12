@@ -3,7 +3,6 @@
 
 #if os(WASI)
 import JavaScriptKit
-import Physica
 
 @MainActor
 final class DebugOverlay {

@@ -57,6 +57,7 @@ struct SnapshotTests {
     @Test func textureFlowsToPathAndTextStyles() {
         let scene = Scene()
         let shape = Circle(radius: 1).textured(.chalk)
+        shape.position = Position(2, -1, 0)
         let text = TextEntity(glyphs: [
             TextComponent.PositionedGlyph(path: .rect(width: 0.5, height: 0.7), offset: .zero)
         ]).shown().textured(.pencil)
@@ -71,6 +72,10 @@ struct SnapshotTests {
         }
         #expect(shapeStyle.style.texture == .chalk)
         #expect(glyph.style.texture == .pencil)
+        // The entity position seeds the grain so it travels with the entity.
+        #expect(approx(shapeStyle.style.textureSeed.x, 2))
+        #expect(approx(shapeStyle.style.textureSeed.y, -1))
+        #expect(approx(glyph.style.textureSeed.x, 0))
     }
 
     @Test func painterOrderFollowsSceneOrder() {

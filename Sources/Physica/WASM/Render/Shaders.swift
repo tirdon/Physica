@@ -1,8 +1,8 @@
 // WGSL shaders. One module, five entry-point pairs sharing the same bind layout:
 // group 0 = per-frame globals, group 1 = per-draw uniforms (256-byte dynamic slots).
 // draw.params is the free vec4: paths use x = texture (0 flat / 1 chalk / 2 pencil /
-// 3 blackboard backdrop); meshes use x = shading (0 lambert / 1 toon), y = toon
-// bands, z = outline inflate.
+// 3 blackboard backdrop), yz = grain seed (entity position); meshes use x = shading
+// (0 lambert / 1 toon), y = toon bands, z = outline inflate.
 
 enum Shaders {
     static let module = """
@@ -66,18 +66,22 @@ enum Shaders {
             let lift = 0.05 * smudge * smudge + 0.012 * dust;
             return vec4<f32>(draw.color.rgb + vec3<f32>(lift), 1.0);
         }
+        // Entity position (params.yz) seeds the grain: the noise is sampled
+        // in entity space, so it rides a moving entity instead of making it
+        // swim through world-pinned static.
+        let seeded = in.world - draw.params.yz;
         if (draw.params.x > 1.5) {
             // Pencil: fine graphite striations along one diagonal + grain.
             let dir = vec2<f32>(0.876, 0.482);   // normalized ~29° hatch
-            let across = dot(in.world, vec2<f32>(-dir.y, dir.x));
-            let along = dot(in.world, dir);
+            let across = dot(seeded, vec2<f32>(-dir.y, dir.x));
+            let along = dot(seeded, dir);
             let line = hash21(vec2<f32>(floor(across * 90.0), floor(along * 7.0)));
-            let grain = hash21(floor(in.world * 160.0));
+            let grain = hash21(floor(seeded * 160.0));
             alpha = alpha * clamp(0.25 + 0.55 * line + 0.30 * grain, 0.0, 1.0);
         } else if (draw.params.x > 0.5) {
             // Chalk: coarse slate grain with voids where the chalk skipped.
-            let grain = hash21(floor(in.world * 220.0));
-            let clump = hash21(floor(in.world * 55.0) + vec2<f32>(7.0, 3.0));
+            let grain = hash21(floor(seeded * 220.0));
+            let clump = hash21(floor(seeded * 55.0) + vec2<f32>(7.0, 3.0));
             alpha = alpha * clamp(0.30 + 0.85 * grain * (0.45 + 0.75 * clump), 0.0, 1.0);
         }
         // Premultiplied output for (one, one-minus-src-alpha) blending.

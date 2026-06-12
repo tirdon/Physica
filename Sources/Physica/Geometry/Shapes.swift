@@ -190,6 +190,12 @@ public final class Arrow: PathEntity {
             path = Path()
             return
         }
+        // Degenerate head → plain line (Plane axes use headLength 0 for
+        // AxisOptions(tipLength: 0)).
+        guard headLength > 1e-6 else {
+            path = .line(from: a, to: b)
+            return
+        }
         let unit = direction / length
         let normal = SIMD2<Real>(-unit.y, unit.x)
         let shaftEnd = b - unit * headLength

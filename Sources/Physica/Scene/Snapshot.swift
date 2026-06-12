@@ -28,18 +28,22 @@ public struct PathStyle: Sendable, Equatable {
     public var strokeWidth: Real
     public var cap: StrokeCap
     public var texture: PathTexture
+    /// Entity world position — seeds chalk/pencil noise so the grain rides
+    /// the entity instead of staying pinned to world space while it moves.
+    public var textureSeed: SIMD2<Real>
     /// Neon tube: wide translucent glow pass under a whitened core stroke.
     public var neon: Bool
 
     public init(
         fill: Color?, stroke: Color?, strokeWidth: Real, cap: StrokeCap = .square,
-        texture: PathTexture = .flat, neon: Bool = false
+        texture: PathTexture = .flat, textureSeed: SIMD2<Real> = .zero, neon: Bool = false
     ) {
         self.fill = fill
         self.stroke = stroke
         self.strokeWidth = strokeWidth
         self.cap = cap
         self.texture = texture
+        self.textureSeed = textureSeed
         self.neon = neon
     }
 }
@@ -196,6 +200,7 @@ extension Scene {
                         strokeWidth: min(max(style.strokeWidth, 0), 1) * strokeScale,
                         cap: style.cap,
                         texture: style.texture,
+                        textureSeed: SIMD2(world.position.x, world.position.y),
                         neon: style.neon
                     ),
                     strokeProgress: pathComponent.strokeProgress,
@@ -252,7 +257,8 @@ extension Scene {
                         stroke: strokeColor.with(opacity: glyphOpacity),
                         strokeWidth: min(max(style.strokeWidth, 0), 1) * strokeScale,
                         cap: style.cap,
-                        texture: style.texture
+                        texture: style.texture,
+                        textureSeed: SIMD2(world.position.x, world.position.y)
                     ),
                     strokeProgress: factors.stroke,
                     fillOpacityFactor: factors.fill

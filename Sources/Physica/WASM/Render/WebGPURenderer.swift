@@ -6,7 +6,7 @@
 
 #if os(WASI)
 import JavaScriptKit
-import Physica
+import JavaScriptEventLoop
 
 @MainActor
 final class WebGPURenderer: RenderBackend {

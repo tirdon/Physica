@@ -185,6 +185,38 @@ enum PendulumDemo {
         if let title {
             scene.play(.erase(title))
         }
+
+        // ---- Charts: a Plane with animatable data — graph, field, streamlines.
+        //      Position the plane before sampling: graphs copy its transform
+        //      at creation (group explicitly to move them together later). ----
+        let plane = Plane(x: -3...3, y: -1.5...1.5, gridStep: 1, font: font).size(3, aspect: 1)
+        plane.position = Position(0, 0.8, 0)
+        scene.play(
+            .draw(plane.subgrid), .draw(plane.grid),
+            .draw(plane.xAxis), .draw(plane.yAxis), .draw(plane.ticks),
+            for: 1.s
+        )
+        scene.add(plane.labels)  // TextEntity ticks pop in once the board is drawn
+		
+        let wave = plane.graph(of: { x in Real.sin(x) }, color: .yellow)
+        scene.play(.draw(wave), for: 1.s)
+        let marker = Circle(radius: 0.09, color: .red)
+        marker.updater = { $0.position = wave.point(at: 1.2) }  // tracks the live curve
+        scene.add(marker)
+        if plane.xLabels.children.count > 3 {
+            // Group subscript: pick the "1" tick label out of the label group.
+            scene.play(plane.xLabels[3].color(.teal), for: 0.5.s)
+        }
+        scene.play(wave.plot { x in Real.sin(2 * x) * 0.6 })   // the data morphs
+
+        let field = plane.field { p in SIMD2(-p.y, p.x) }      // rotation field
+        scene.play(.draw(field), for: 1.2.s)
+        scene.play(field.plot { p in SIMD2(p.x, -p.y) })       // …becomes a saddle
+
+        let flow = plane.streamlines { p in SIMD2(p.x, -p.y) }
+        scene.play(.erase(field), .draw(flow), for: 1.s)
+        scene.play(flow.plot { p in SIMD2(-p.y, p.x) }, for: 1.2.s)  // hyperbolas → orbits
+        scene.wait()
     }
 }
 #endif

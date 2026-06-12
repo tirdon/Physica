@@ -4,7 +4,7 @@
 
 #if os(WASI)
 import JavaScriptKit
-import Physica
+import JavaScriptEventLoop
 
 enum MathJaxError: Error {
     case unavailable          // no DOM (headless) — not a failure, just absent
@@ -13,7 +13,7 @@ enum MathJaxError: Error {
 }
 
 @MainActor
-enum MathJaxLoader {
+public enum MathJaxLoader {
     static let scriptURL = "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"
 
     private static var isReady = false
@@ -68,7 +68,7 @@ enum MathJaxLoader {
     }
 
     /// One-call convenience: TeX → centered formula entity.
-    static func formula(
+    public static func formula(
         _ tex: String, fontSize: Real = 1, color: Color = .white
     ) async throws -> TextEntity {
         try await load()

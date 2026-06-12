@@ -2,19 +2,19 @@
 
 #if os(WASI)
 import JavaScriptKit
-import Physica
+import JavaScriptEventLoop
 
 enum FontLoaderError: Error {
     case fetchFailed(String)
 }
 
 @MainActor
-enum FontLoader {
+public enum FontLoader {
     /// Default demo face — a glyf-based TrueType file on a versioned CDN.
-    static let defaultURL =
+    public static let defaultURL =
         "https://cdn.jsdelivr.net/npm/@expo-google-fonts/roboto@0.2.3/Roboto_400Regular.ttf"
 
-    static func load(url: String = defaultURL) async throws -> Font {
+    public static func load(url: String = defaultURL) async throws -> Font {
         let global = JSObject.global
         let response = try await JSPromise(unsafelyWrapping: global.fetch!(url).object!).value()
         guard response.ok.boolean == true else {

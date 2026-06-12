@@ -2,7 +2,6 @@
 // Per-frame rebuild: one flat-vertex stream, one mesh stream, one uniform block.
 
 #if os(WASI)
-import Physica
 
 struct DrawCommand {
     enum Kind {
@@ -64,7 +63,8 @@ enum GeometryUploader {
     // MARK: Uniform slots
 
     /// `params` is the shader's free vec4: paths use x = texture mode
-    /// (0 flat / 1 chalk / 2 pencil / 3 blackboard backdrop); meshes use
+    /// (0 flat / 1 chalk / 2 pencil / 3 blackboard backdrop), yz = grain
+    /// seed (entity position — anchors the noise to the entity); meshes use
     /// x = shading (0 lambert / 1 toon), y = toon bands, z = outline
     /// thickness (vs_outline inflate).
     private static func appendUniformSlot(
@@ -80,12 +80,17 @@ enum GeometryUploader {
         return offset
     }
 
-    private static func params(for texture: PathTexture) -> [Float32] {
-        switch texture {
+    private static func params(for style: PathStyle) -> [Float32] {
+        let mode: Float32
+        switch style.texture {
         case .flat: return [0, 0, 0, 0]
-        case .chalk: return [1, 0, 0, 0]
-        case .pencil: return [2, 0, 0, 0]
+        case .chalk: mode = 1
+        case .pencil: mode = 2
         }
+        // yz seed the grain with the entity position so the noise rides
+        // the entity (world − seed in the shader) instead of staying
+        // world-pinned while it moves.
+        return [mode, Float32(style.textureSeed.x), Float32(style.textureSeed.y), 0]
     }
 
     // MARK: Background
@@ -182,7 +187,7 @@ enum GeometryUploader {
 
     private static func appendFill(_ path: PathPrimitive, color: Color, into packet: inout FramePacket) {
         let slot = appendUniformSlot(
-            model: .identity, color: color, params: params(for: path.style.texture), into: &packet
+            model: .identity, color: color, params: params(for: path.style), into: &packet
         )
 
         // Pass A: triangle fans (apex = first point) into the stencil, all contours.
@@ -327,7 +332,7 @@ enum GeometryUploader {
         }
 
         let slot = appendUniformSlot(
-            model: .identity, color: color, params: params(for: path.style.texture), into: &packet
+            model: .identity, color: color, params: params(for: path.style), into: &packet
         )
         let range = emitQuads(halfWidth: halfWidth)
         guard range.count > 0 else { return }

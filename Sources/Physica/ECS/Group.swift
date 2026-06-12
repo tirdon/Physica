@@ -43,6 +43,12 @@ open class Group: Entity, HasHierarchy {
         childrenDidChange()
     }
 
+    /// Child access by index, in add order: `plane.xLabels[0].color(.red)`,
+    /// `plane.axes[0] === plane.xAxis`. Traps when out of range, like Array.
+    public subscript(index: Int) -> Entity {
+        children[index]
+    }
+
     /// Hook for layout subclasses; called after the child list changes.
     open func childrenDidChange() {}
 
