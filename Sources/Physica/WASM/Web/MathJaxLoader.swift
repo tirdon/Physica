@@ -19,8 +19,9 @@ public enum MathJaxLoader {
     private static var isReady = false
 
     /// Inject the MathJax script (crossorigin — jsDelivr sends CORS headers,
-    /// required under our COEP) and await its startup promise.
-    static func load() async throws {
+    /// required under our COEP) and await its startup promise. Public so the
+    /// story runtime can resolve it once at boot, then render tokens synchronously.
+    public static func load() async throws {
         if isReady { return }
         let global = JSObject.global
         guard let document = global.document.object, document.head.object != nil else {
@@ -54,8 +55,9 @@ public enum MathJaxLoader {
         isReady = true
     }
 
-    /// TeX → the outer HTML of MathJax's <svg> (display style).
-    static func svg(for tex: String) throws -> String {
+    /// TeX → the outer HTML of MathJax's <svg> (display style). Synchronous once
+    /// `load()` has resolved — the per-token glyph provider relies on this.
+    public static func svg(for tex: String) throws -> String {
         guard isReady, let mathJax = JSObject.global.MathJax.object else {
             throw MathJaxError.renderFailed(tex)
         }

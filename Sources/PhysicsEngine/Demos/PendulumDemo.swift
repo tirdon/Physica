@@ -189,7 +189,7 @@ enum PendulumDemo {
         // ---- Charts: a Plane with animatable data — graph, field, streamlines.
         //      Position the plane before sampling: graphs copy its transform
         //      at creation (group explicitly to move them together later). ----
-        let plane = Plane(x: -3...3, y: -1.5...1.5, gridStep: 1, font: font).size(3, aspect: 1)
+		let plane = Plane(x: -3...3, y: -1.5...1.5, gridStep: 1, font: font).size(3, aspect: 2)
         plane.position = Position(0, 0.8, 0)
         scene.play(
             .draw(plane.subgrid), .draw(plane.grid),

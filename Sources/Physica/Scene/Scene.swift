@@ -20,6 +20,20 @@ public final class Scene: Identifiable {
     /// Width/height of the bound viewport; kept current by the engine.
     public var viewportAspect: Real = 1.6
 
+    /// The camera as an animatable entity (Manim's `camera.frame`):
+    /// `scene.play(scene.frame.move(to: 6.i), scene.frame.zoom(to: 5))`.
+    /// A proxy — it never joins the scene graph.
+    public private(set) lazy var frame = SceneCamera(scene: self)
+
+    /// Parallel clip layer for triggered actions, drag feedback, and game
+    /// moves — runs every frame, even while the timeline is paused, and is
+    /// not part of the scrub history. See `interact(_:for:easing:onInterrupt:)`.
+    public let interactions = InteractionRunner()
+
+    /// Pointer-driven drag-and-drop, fed every input event by `dispatch`.
+    /// Pause-independent (story mode rests paused while the user drags).
+    public let drag = DragCoordinator()
+
     /// Visible world rect used to resolve `move(to: Unit)`.
     public var frameBounds: Bounds {
         camera.visibleRect(atZ: 0, aspect: viewportAspect)
@@ -198,6 +212,19 @@ public final class Scene: Identifiable {
     }
 
     func playItems(_ items: [any Animatable], for duration: Duration?, easing: Easing?) -> Animation {
+        let baked = bakeClip(items, for: duration, easing: easing)
+        timeline.enqueue(baked.clip)
+        return Animation(pairs: baked.pairs, duration: .interval(baked.clip.duration))
+    }
+
+    /// Bakes animatable items into one clip — the shared middle of `play`
+    /// (which enqueues on the scrubbable timeline) and `interact` (which runs
+    /// the clip NOW on the parallel interaction layer). Pairs `add` already
+    /// consumed are filtered identically in both paths; only `add` inserts
+    /// into `consumedPairIDs`.
+    func bakeClip(
+        _ items: [any Animatable], for duration: Duration?, easing: Easing?
+    ) -> (clip: AnimationClip, pairs: [AnimationPair]) {
         var tracks: [any AnimationTrackProtocol] = []
         var pairs: [AnimationPair] = []
         var labels: [String] = []
@@ -240,8 +267,50 @@ public final class Scene: Identifiable {
         }
 
         let clip = AnimationClip(label: labels.joined(separator: " + "), tracks: tracks)
-        timeline.enqueue(clip)
-        return Animation(pairs: pairs, duration: .interval(clip.duration))
+        return (clip, pairs)
+    }
+
+    // MARK: Interactions — parallel clips OUTSIDE the scrub history
+
+    /// Plays NOW, in parallel with the timeline (even while it is paused at a
+    /// story step). Same surface as `play` — moves, write/draw/erase,
+    /// highlight, shake all work — but the clip is not part of the scrubbable
+    /// history: seeking never touches it, and entities it introduces persist
+    /// across scrubs (the same policy as system-driven state). `onInterrupt`
+    /// decides what a slide change does to the clip mid-flight.
+    @discardableResult
+    public func interact(
+        _ items: any Animatable...,
+        for duration: Duration? = nil,
+        easing: Easing? = nil,
+        onInterrupt: InterruptionPolicy = .complete,
+        completion: (@MainActor () -> Void)? = nil
+    ) -> InteractionRunner.Handle {
+        interactItems(items, for: duration, easing: easing, onInterrupt: onInterrupt, completion: completion)
+    }
+
+    /// Concrete overload so leading-dot factories resolve:
+    /// `scene.interact(.highlight(box))`, `scene.interact(.shake(token))`.
+    @discardableResult
+    public func interact(
+        _ items: Animation...,
+        for duration: Duration? = nil,
+        easing: Easing? = nil,
+        onInterrupt: InterruptionPolicy = .complete,
+        completion: (@MainActor () -> Void)? = nil
+    ) -> InteractionRunner.Handle {
+        interactItems(items, for: duration, easing: easing, onInterrupt: onInterrupt, completion: completion)
+    }
+
+    func interactItems(
+        _ items: [any Animatable],
+        for duration: Duration?,
+        easing: Easing?,
+        onInterrupt: InterruptionPolicy,
+        completion: (@MainActor () -> Void)?
+    ) -> InteractionRunner.Handle {
+        let baked = bakeClip(items, for: duration, easing: easing)
+        return interactions.run(clip: baked.clip, policy: onInterrupt, in: self, completion: completion)
     }
 
     /// Idle clip — timeline time passes, custom systems keep updating.
@@ -276,6 +345,9 @@ public final class Scene: Identifiable {
             )
             systems.update(context: context)
         }
+        // Interactions run OUTSIDE the paused gate: story mode rests paused at
+        // step boundaries, exactly when triggered actions and drags animate.
+        interactions.advance(by: deltaTime, in: self)
         runLayouts()
         runUpdaters()
     }
