@@ -105,6 +105,44 @@ import Testing
         #expect(game.spawnedEquations[1].current.matches(try Equation(parsing: "0 = mg + T\\sin\\theta")))
     }
 
+    @Test func usedProjectionOperatorIsRetiredAndStaysGone() throws {
+        let components = try ComponentTable([
+            "F": ("F_x", "0"),
+            "g": ("0", "g"),
+            "T": ("T\\cos\\theta", "T\\sin\\theta"),
+        ])
+        let (scene, game) = try makeGame("\\vec F = m\\vec g + \\vec T", components: components)
+        let drop = game.equation.components[DropTargetComponent.self]!
+
+        // The operator chip enters via an `add` clip (a scene root).
+        let op = Circle(radius: 0.3)
+        op.name = "project-x"
+        scene.insert(op)
+        #expect(scene.entities.contains { $0 === op })
+
+        #expect(drop.onDrop!(.projection(.x), op) == .accepted)
+        #expect(!scene.entities.contains { $0 === op })  // consumed
+        // A scrub re-seek replays the `add` (calls insert again) — retired → no-op.
+        scene.insert(op)
+        #expect(!scene.entities.contains { $0 === op })
+    }
+
+    @Test func spawnedEquationsStackWithoutOverlapping() throws {
+        let components = try ComponentTable([
+            "F": ("F_x", "0"),
+            "g": ("0", "g"),
+            "T": ("T\\cos\\theta", "T\\sin\\theta"),
+        ])
+        let (_, game) = try makeGame("\\vec F = m\\vec g + \\vec T", components: components)
+        let drop = game.equation.components[DropTargetComponent.self]!
+        _ = drop.onDrop!(.projection(.x), Circle(radius: 0.1))
+        _ = drop.onDrop!(.projection(.y), Circle(radius: 0.1))
+        #expect(game.spawnedEquations.count == 2)
+        // The second projection lands strictly below the first (no pile-up at
+        // the same y the way both keying off `equation.position` would give).
+        #expect(game.spawnedEquations[1].position.y < game.spawnedEquations[0].position.y)
+    }
+
     @Test func projectionWithoutComponentTableIsRejected() throws {
         let (_, game) = try makeGame("\\vec F = m\\vec g")
         let drop = game.equation.components[DropTargetComponent.self]!

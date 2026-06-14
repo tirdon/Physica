@@ -219,6 +219,11 @@ final class AddEntitiesTrack: AnimationTrackProtocol {
         self.label = "add(" + entities.map { name(of: $0) }.joined(separator: ", ") + ")"
     }
 
+    /// The entities this track was built to introduce — known at build time (the
+    /// `inserted` subset is only computed at runtime `begin`). `Story` scans these
+    /// across a slide's clips to find what to tear down at the slide's end.
+    var introducedTargets: [Entity] { entities }
+
     func begin(in scene: Scene) {
         guard inserted == nil else { return }
         inserted = entities.filter { $0.scene !== scene }
@@ -280,6 +285,55 @@ final class RemoveEntityTrack: AnimationTrackProtocol {
     func rewind(in scene: Scene) {
         guard let index = rootIndex else { return }
         scene.insert(entity, at: index)
+    }
+}
+
+/// Near-zero-duration track that clears every scene root except a protected set
+/// (the story's globals). What it removes is captured at `begin` (runtime), so
+/// it is accurate at the timeline point it actually plays, and scrubbing back
+/// re-inserts each at its original depth (ascending, so the indices rebuild the
+/// original order). Powers `Scene.clearAll()`.
+///
+/// The sentinel duration (1e-7) is below the step-boundary collapse threshold
+/// (1e-6), so it introduces no extra step. The `> 0` apply condition means
+/// seeking *to* the clearAll's start time (landing on the slide boundary) does
+/// not fire the clear — only advancing *past* it (right arrow / scroll) does.
+/// This keeps the previous slide's content visible until the viewer explicitly
+/// moves forward.
+@MainActor
+final class ClearAllTrack: AnimationTrackProtocol {
+    /// Sentinel: small enough to collapse into the surrounding step boundary
+    /// (< 1e-6), large enough that `apply(at: duration)` satisfies `> 0`.
+    let duration: TimeInterval = 1e-7
+    let offset: TimeInterval = 0
+    let label = "clearAll()"
+
+    private let protectedIDs: Set<ObjectIdentifier>
+    private var captured = false
+    private var removals: [(entity: Entity, index: Int)] = []
+
+    init(protectedIDs: Set<ObjectIdentifier>) {
+        self.protectedIDs = protectedIDs
+    }
+
+    func begin(in scene: Scene) {
+        guard !captured else { return }
+        captured = true
+        removals = scene.entities.enumerated()
+            .filter { !protectedIDs.contains(ObjectIdentifier($0.element)) }
+            .map { (entity: $0.element, index: $0.offset) }
+    }
+
+    func apply(at clipTime: TimeInterval, in scene: Scene) {
+        if clipTime > 0 {
+            for removal in removals { scene.detach(removal.entity) }
+        } else {
+            for removal in removals { scene.insert(removal.entity, at: removal.index) }
+        }
+    }
+
+    func rewind(in scene: Scene) {
+        for removal in removals { scene.insert(removal.entity, at: removal.index) }
     }
 }
 

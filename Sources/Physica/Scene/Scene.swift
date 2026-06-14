@@ -65,6 +65,7 @@ public final class Scene: Identifiable {
     // MARK: Entity management (timeline tracks call these)
 
     func insert(_ entity: Entity, at index: Int? = nil) {
+        guard !entity.isRetired else { return }
         guard !entities.contains(where: { $0 === entity }) else { return }
         if let index, index < entities.count {
             entities.insert(entity, at: index)  // re-insert after an erase: keep painter's order
@@ -78,6 +79,23 @@ public final class Scene: Identifiable {
         guard let index = entities.firstIndex(where: { $0 === entity }) else { return }
         entities.remove(at: index)
         entity.scene = nil
+    }
+
+    /// Detaches an entity and marks it retired, so structural re-inserts (a
+    /// scrub re-seek replaying an `add` clip) skip it for good. For one-shot
+    /// tools like a consumed projection operator that must not reappear.
+    func retire(_ entity: Entity) {
+        entity.isRetired = true
+        detach(entity)
+    }
+
+    /// Immediately removes an entity from the scene (and its render/hit-test
+    /// traversal). For transient entities introduced *outside* the scrub
+    /// timeline — e.g. interaction-drawn overlays a caller wants to clear.
+    /// Scrub-managed entities (added via `add`) should be removed by scrubbing
+    /// or `.erase`, not this.
+    public func remove(_ entity: Entity) {
+        detach(entity)
     }
 
     private func attach(_ entity: Entity) {
@@ -147,6 +165,80 @@ public final class Scene: Identifiable {
             pairs: entities.map { AnimationPair(target: $0, blueprint: IdentityBlueprint()) },
             duration: .zero
         )
+    }
+
+    /// Enqueues a 0-duration clip that drops `entities` at this point of the
+    /// timeline — scrub-safe: rewinding past it re-inserts each at its original
+    /// root index. Unlike `.erase`, nothing animates (no fade or stroke retract);
+    /// the entities simply vanish. Backs `clear(_:)`.
+    func dropEntities(_ entities: [Entity]) {
+        guard !entities.isEmpty else { return }
+        let tracks: [any AnimationTrackProtocol] = entities.map {
+            RemoveEntityTrack(entity: $0, at: 0)
+        }
+        let label = tracks.map(\.label).joined(separator: " + ")
+        timeline.enqueue(AnimationClip(label: label, tracks: tracks))
+    }
+
+    /// Removes specific entities at this point of the timeline (scrub-safe — a
+    /// scrub back re-inserts them at their original depth). Story content persists
+    /// by default; `clear`/`clearAll` are how a slide takes things off the board.
+    @discardableResult
+    public func clear(_ entities: Entity...) -> Animation {
+        dropEntities(entities)
+        return Animation(pairs: [], duration: .zero)
+    }
+
+    /// Requests a fresh slate **when the next slide starts** — at that point every
+    /// root except the story globals (entities `scene.add`ed before the slides) is
+    /// dropped. Deferred on purpose: the calling slide's content stays visible
+    /// through its own duration, and the *last* slide (no next slide) keeps its
+    /// content. Read like `defer { s.clearAll() }` — placement in the slide doesn't
+    /// matter. What it removes is captured at playback, so it tracks whatever is
+    /// actually present; scrubbing back restores it. (No-op outside story mode.)
+    @discardableResult
+    public func clearAll() -> Animation {
+        clearAllPending = true
+        return Animation(pairs: [], duration: .zero)
+    }
+
+    // MARK: Story scaffolding (set/read by `Story.slide`)
+
+    /// The globals `clearAll()` must keep, kept current by `Story` per slide.
+    var storyGlobalIDs: Set<ObjectIdentifier> = []
+    /// Set by `clearAll()`, fired by `Story` at the next slide's start.
+    private(set) var clearAllPending = false
+
+    /// Enqueues the deferred `clearAll()` now (called by `Story` when the next
+    /// slide begins). Protects whatever globals `Story` last published.
+    func flushPendingClearAll() {
+        guard clearAllPending else { return }
+        clearAllPending = false
+        let track = ClearAllTrack(protectedIDs: storyGlobalIDs)
+        timeline.enqueue(AnimationClip(label: track.label, tracks: [track]))
+    }
+    /// The previous slide's own-introduced entities, which `addLastState()`
+    /// re-adds. Empty outside story building.
+    var carryForwardEntities: [Entity] = []
+    /// What this slide pulled in via `addLastState` — `Story` reads it to keep
+    /// those out of the slide's own-introduced (carry-forward) set.
+    private(set) var carriedThisSlide: [Entity] = []
+
+    /// Called by `Story` before each slide's content runs.
+    func beginSlideCarry(previous: [Entity]) {
+        carryForwardEntities = previous
+        carriedThisSlide = []
+    }
+
+    /// Story mode: re-introduces the entities the *previous* slide newly added, so
+    /// this slide can continue that picture after a `clearAll()`. A no-op on the
+    /// first slide / outside story building. Scrub-safe (re-adds through the normal
+    /// add clip); if those entities are still present it does nothing.
+    @discardableResult
+    public func addLastState() -> Animation {
+        guard !carryForwardEntities.isEmpty else { return Animation(pairs: [], duration: .zero) }
+        carriedThisSlide.append(contentsOf: carryForwardEntities)
+        return addItems(carryForwardEntities)
     }
 
     /// Plays the given animations together as one clip.

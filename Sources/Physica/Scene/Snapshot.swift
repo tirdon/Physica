@@ -99,10 +99,25 @@ public enum RenderPrimitive: Sendable {
     }
 }
 
+/// Which interaction a debug-overlay label is flagging. The Option+Shift
+/// overlay colors labels by this instead of spelling the kind out in text.
+public enum InteractionKind: String, Sendable, Equatable {
+    case drag, drop, tap, doubleClick, hover
+}
+
 /// Index labels shown while Shift is held.
 public struct DebugLabel: Sendable, Equatable {
     public var text: String
     public var worldPosition: Position
+    /// Set on the interactive (Option+Shift) overlay so the renderer can color
+    /// the label by interaction kind; nil for the plain index overlay.
+    public var interaction: InteractionKind?
+
+    public init(text: String, worldPosition: Position, interaction: InteractionKind? = nil) {
+        self.text = text
+        self.worldPosition = worldPosition
+        self.interaction = interaction
+    }
 }
 
 public struct CameraState: Sendable {
@@ -139,7 +154,6 @@ extension Scene {
     /// Flattens the visible entity tree to renderer-ready primitives, painter's order.
     public func snapshot(includeDebugLabels: Bool = false) -> SceneSnapshot {
         var primitives: [RenderPrimitive] = []
-        var labels: [DebugLabel]? = includeDebugLabels ? [] : nil
 
         // strokeWidth is normalized (1 = 10% of the frame's longest side);
         // primitives carry resolved world units — the renderer stays dumb.
@@ -152,8 +166,7 @@ extension Scene {
                 entity: root,
                 indexPath: "\(index)",
                 strokeScale: strokeScale,
-                into: &primitives,
-                labels: &labels
+                into: &primitives
             )
         }
 
@@ -167,7 +180,9 @@ extension Scene {
             background: background,
             frame: frameBounds,
             time: timeline.currentTime,
-            debugLabels: labels ?? []
+            // Same source as the live overlay (one centered label per top-level
+            // entity), so snapshot tests see exactly what the DOM overlay draws.
+            debugLabels: includeDebugLabels ? collectDebugLabels() : []
         )
     }
 
@@ -175,11 +190,8 @@ extension Scene {
         entity: Entity,
         indexPath: String,
         strokeScale: Real,
-        into primitives: inout [RenderPrimitive],
-        labels: inout [DebugLabel]?
+        into primitives: inout [RenderPrimitive]
     ) {
-        labels?.append(DebugLabel(text: indexPath, worldPosition: entity.center))
-
         if let pathComponent = entity.components[PathComponent.self],
            !pathComponent.path.isEmpty {
             let style = entity.components[RenderStyleComponent.self] ?? RenderStyleComponent()
@@ -272,8 +284,7 @@ extension Scene {
                     entity: child,
                     indexPath: "\(indexPath).\(childIndex)",
                     strokeScale: strokeScale,
-                    into: &primitives,
-                    labels: &labels
+                    into: &primitives
                 )
             }
         }

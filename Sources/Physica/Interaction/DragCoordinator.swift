@@ -37,6 +37,11 @@ public final class DragCoordinator {
 
     private var phase: Phase = .idle
 
+    /// The `HoverComponent` entity the bare pointer currently rests over (no
+    /// button held). Distinct from `ActiveDrag.hovered`, which is the drop
+    /// target under an in-flight drag.
+    private var hoverTarget: Entity?
+
     public init() {}
 
     // MARK: Event entry (Scene.dispatch)
@@ -47,6 +52,7 @@ public final class DragCoordinator {
         case .pointerMoved(let p): updateDrag(at: p, in: scene)
         case .pointerUp(let p): endDrag(at: p, in: scene)
         case .pointerCancelled: cancelActive(in: scene)
+        case .doubleClick(let p): deliverDoubleClick(at: p, in: scene)
         case .keyDown, .keyUp: break
         }
     }
@@ -67,13 +73,19 @@ public final class DragCoordinator {
     private func updateDrag(at pointer: Position, in scene: Scene) {
         switch phase {
         case .idle:
-            break
+            // No gesture: the bare pointer is just hovering. Keep HoverComponents
+            // in sync. (Mid-gesture moves below own hover via the drop target.)
+            updateHoverTarget(at: pointer, in: scene)
         case .pressed(let source, let start):
             guard movedPastSlop(from: start, to: pointer) else { return }
             // Only a draggable promotes; a tap handler dragged past slop is just
-            // a cancelled tap.
+            // a cancelled tap. Anchor the grab to `start` (the press point), not
+            // the post-slop `pointer`: the offset must be where the finger first
+            // touched relative to the entity, so the slop travel — up to a whole
+            // flick on a fast first move — doesn't leak in and push the payload
+            // away from the pointer.
             if isEnabled, let draggable = source.components[DraggableComponent.self], draggable.isEnabled {
-                promote(source: source, draggable: draggable, pointer: pointer, in: scene)
+                promote(source: source, draggable: draggable, grabbedAt: start, pointer: pointer, in: scene)
             } else {
                 phase = .idle
             }
@@ -110,6 +122,9 @@ public final class DragCoordinator {
                 returnHome(active, in: scene)
             }
         }
+        // Re-evaluate the bare-pointer hover at the release point — a click or a
+        // drop can land the cursor on a different HoverComponent than before.
+        updateHoverTarget(at: pointer, in: scene)
     }
 
     // MARK: Public controls
@@ -131,6 +146,17 @@ public final class DragCoordinator {
                 active.dragged.transform = active.homeTransform
             }
         }
+        // Drop any standing bare-pointer hover too — a slide change (the story
+        // player's caller) resets every interaction affordance.
+        setHoverTarget(nil)
+    }
+
+    /// The bare pointer left the interactive surface (the mouse slid off the
+    /// canvas) while idle — drop any standing `HoverComponent` highlight so it
+    /// doesn't stick. A captured drag survives off-canvas, so this no-ops unless
+    /// idle; the web shell calls it on `pointerleave`.
+    public func clearHover() {
+        if case .idle = phase { setHoverTarget(nil) }
     }
 
     /// Whether a draggable sits under this world point — the web shell consults
@@ -157,7 +183,7 @@ public final class DragCoordinator {
 
     // MARK: Internals
 
-    private func promote(source: Entity, draggable: DraggableComponent, pointer: Position, in scene: Scene) {
+    private func promote(source: Entity, draggable: DraggableComponent, grabbedAt grab: Position, pointer: Position, in scene: Scene) {
         let dragged: Entity
         let isProxy: Bool
         if let make = draggable.makeDragProxy {
@@ -170,11 +196,19 @@ public final class DragCoordinator {
             isProxy = false
         }
         draggable.onDragBegan?(source)
-        let grabOffset = dragged.position - pointer
-        phase = .dragging(ActiveDrag(
+        // Offset from the press point, so the grabbed spot stays under the
+        // pointer; the home transform is captured before the first follow move.
+        let grabOffset = dragged.position - grab
+        let homeTransform = dragged.transform
+        // Honor the move that crossed the slop right away — otherwise the entity
+        // sits a frame behind on a fast flick.
+        dragged.position = pointer + grabOffset
+        var active = ActiveDrag(
             source: source, dragged: dragged, isProxy: isProxy, payload: draggable.payload,
-            grabOffset: grabOffset, homeTransform: dragged.transform, hovered: nil
-        ))
+            grabOffset: grabOffset, homeTransform: homeTransform, hovered: nil
+        )
+        updateHover(&active, pointer: pointer, in: scene)
+        phase = .dragging(active)
     }
 
     private func returnHome(_ active: ActiveDrag, in scene: Scene) {
@@ -201,6 +235,38 @@ public final class DragCoordinator {
         } else if let draggable = entity.components[DraggableComponent.self], draggable.isEnabled {
             draggable.onTap?(entity)
         }
+    }
+
+    /// Fires the topmost `DoubleClickComponent` under the point. Stays live even
+    /// while `isEnabled == false` (chips/buttons resolve choices) — a discrete
+    /// click never disturbs the single-pointer drag state machine.
+    private func deliverDoubleClick(at pointer: Position, in scene: Scene) {
+        let hit = topmostHit(at: pointer, in: scene) { entity in
+            entity.components[DoubleClickComponent.self]?.isEnabled ?? false
+        }
+        if let hit, let dbl = hit.components[DoubleClickComponent.self], dbl.isEnabled {
+            dbl.onDoubleClick(hit)
+        }
+    }
+
+    /// Recompute which `HoverComponent` the bare pointer rests over and fire
+    /// enter/leave on the difference.
+    private func updateHoverTarget(at pointer: Position, in scene: Scene) {
+        let next = topmostHit(at: pointer, in: scene) { entity in
+            entity.components[HoverComponent.self]?.isEnabled ?? false
+        }
+        setHoverTarget(next)
+    }
+
+    private func setHoverTarget(_ next: Entity?) {
+        guard next !== hoverTarget else { return }
+        if let old = hoverTarget, let hover = old.components[HoverComponent.self] {
+            hover.onHoverChanged(old, false)
+        }
+        if let new = next, let hover = new.components[HoverComponent.self] {
+            hover.onHoverChanged(new, true)
+        }
+        hoverTarget = next
     }
 
     private func updateHover(_ active: inout ActiveDrag, pointer: Position, in scene: Scene) {

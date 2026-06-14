@@ -114,8 +114,9 @@ struct SnapshotTests {
 
         #expect(scene.snapshot().debugLabels.isEmpty)
 
+        // The group collapses to a single centered index — children aren't unfolded.
         let labels = scene.snapshot(includeDebugLabels: true).debugLabels
-        #expect(labels.map(\.text) == ["0", "0.0", "0.1"])
+        #expect(labels.map(\.text) == ["0"])
     }
 
     @Test func debugLabelsSkipInvisibleEntities() {
@@ -133,6 +134,90 @@ struct SnapshotTests {
         // faded ("1") gone; group ("2") hides because nothing under it is visible.
         let labels = scene.collectDebugLabels()
         #expect(labels.map(\.text) == ["0"])
+    }
+
+    @Test func indexOverlayCollapsesGroupsToOneLabel() {
+        let scene = Scene()
+        let circle = Circle()
+        let bag = Group(Circle(), Rectangle())   // plain group → one label, not 1.0/1.1
+        let equation = EquationEntity(try! Equation(parsing: "2x = 6"), provider: StubTokenGlyphProvider())
+        scene.add(circle, bag, equation)
+        scene.update(deltaTime: 0.016)
+
+        // Each top-level entity is one centered index — no unfolded children.
+        #expect(scene.collectDebugLabels().map(\.text) == ["0", "1", "2"])
+
+        // The Option+Shift overlay still drills into the equation's draggable tokens.
+        #expect(scene.collectInteractiveDebugLabels().count > 1)
+    }
+
+    @Test func interactiveDebugLabelsNumberAndColorInteractiveEntities() {
+        let scene = Scene()
+        let draggable = Circle()
+        draggable.components[DraggableComponent.self] = DraggableComponent(payload: .tag("x"))
+        let plain = Rectangle()
+        let target = Triangle()
+        target.components[DropTargetComponent.self] = DropTargetComponent()
+        // The group itself is a drop target (the equation-game shape), and it
+        // still recurses into its interactive children.
+        let group = Group(draggable, plain, target)
+        group.components[DropTargetComponent.self] = DropTargetComponent()
+        scene.add(group)
+        scene.update(deltaTime: 0.016)
+
+        let labels = scene.collectInteractiveDebugLabels()
+        // Flat sequential numbers (no dotted path); plain rectangle skipped.
+        #expect(labels.map(\.text) == ["1", "2", "3"])
+        // Kind rides the label (rendered as color, not text): group drop,
+        // draggable, target drop.
+        #expect(labels.map(\.interaction) == [.drop, .drag, .drop])
+    }
+
+    @Test func dropAreasCollectVisibleDropTargetBounds() {
+        let scene = Scene()
+        let draggable = Circle()
+        draggable.components[DraggableComponent.self] = DraggableComponent(payload: .tag("x"))
+        let target = Rectangle(width: 2, height: 1)
+        target.position = Position(3, 0, 0)
+        target.components[DropTargetComponent.self] = DropTargetComponent()
+        // A group that is itself a drop target contributes its whole union bound.
+        let inner = Triangle()
+        inner.components[DropTargetComponent.self] = DropTargetComponent()
+        let group = Group(draggable, inner)
+        group.components[DropTargetComponent.self] = DropTargetComponent()
+        scene.add(target, group)
+        scene.update(deltaTime: 0.016)
+
+        // One box per drop target (group + its inner target); the draggable and
+        // the group's plain members contribute none.
+        let areas = scene.collectDropAreas()
+        #expect(areas.count == 3)
+        // The standalone target's box is centered where we placed it.
+        #expect(approx(areas[0].center, Position(3, 0, 0), tolerance: 1e-4))
+        #expect(approx(areas[0].size.x, 2, tolerance: 1e-4))
+    }
+
+    @Test func dropAreasSkipInvisibleTargets() {
+        let scene = Scene()
+        let hidden = Rectangle(width: 1, height: 1)
+        hidden.components[DropTargetComponent.self] = DropTargetComponent()
+        hidden.components[RenderStyleComponent.self] = RenderStyleComponent(opacity: 0)
+        scene.add(hidden)
+        scene.update(deltaTime: 0.016)
+
+        #expect(scene.collectDropAreas().isEmpty)
+    }
+
+    @Test func interactiveDebugLabelsIncludeDisabledHandlers() {
+        let scene = Scene()
+        let chip = Circle()
+        chip.components[TapHandlerComponent.self] = TapHandlerComponent(isEnabled: false) { _ in }
+        scene.add(chip)
+        scene.update(deltaTime: 0.016)
+
+        let labels = scene.collectInteractiveDebugLabels()
+        #expect(labels.map(\.text) == ["1"])
+        #expect(labels.first?.interaction == .tap)
     }
 
     @Test func groupTransformAppliesToChildPrimitives() {

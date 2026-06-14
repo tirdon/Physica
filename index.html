@@ -63,6 +63,7 @@
     .replay[hidden] { display: none; }
     .overlay-label {
       position: absolute;
+      z-index: 2;
       transform: translate(-50%, -50%);
       padding: 1px 5px;
       border-radius: 4px;
@@ -71,6 +72,22 @@
       font: 11px/1.5 ui-monospace, monospace;
       pointer-events: none;
       white-space: nowrap;
+    }
+    /* Option+Shift overlay — draggable/touchable entities, colored by kind */
+    .overlay-label-drag        { background: rgba(255, 170, 64, 0.92);  color: #221604; }
+    .overlay-label-drop        { background: rgba(120, 230, 130, 0.92); color: #06210a; }
+    .overlay-label-tap         { background: rgba(200, 150, 255, 0.92); color: #1a0a2a; }
+    .overlay-label-doubleClick { background: rgba(255, 130, 190, 0.92); color: #2a0617; }
+    .overlay-label-hover       { background: rgba(120, 220, 240, 0.92); color: #04222a; }
+    /* Option+Shift drop-target hit regions — outlined under the number labels */
+    .overlay-drop-area {
+      position: absolute;
+      z-index: 1;
+      box-sizing: border-box;
+      border: 1.5px dashed rgba(120, 230, 130, 0.9);
+      background: rgba(120, 230, 130, 0.12);
+      border-radius: 6px;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -86,7 +103,7 @@
       <input id="scrub" type="range" min="0" max="1000" value="0" step="1">
       <span class="time" id="time">0.00 / 0.00 s</span>
     </div>
-    <p class="hint">Hold <kbd>Shift</kbd> to show entity indices. Drag the slider to scrub the timeline.</p>
+    <p class="hint">Hold <kbd>Shift</kbd> for entity indices, <kbd>⌥</kbd>+<kbd>Shift</kbd> for draggable/touchable elements. Drag the slider to scrub the timeline.</p>
   </main>
   <script type="module">
     import { init } from "./js/index.js";

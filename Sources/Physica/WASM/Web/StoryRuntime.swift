@@ -32,6 +32,10 @@ public final class StoryRuntime {
     private var totalPixels: Double = 0
 
     private var pendingScrollY: Double?
+    /// The last scrollY we wrote via `mirrorScrollFromPlayer`, used to drop the
+    /// browser's echo `scroll` event so it doesn't re-seek the playhead off the
+    /// boundary an arrow tween just landed on.
+    private var lastMirroredScrollY: Double?
     private var lastSlide = -1
 
     private init(engine: Engine, story: Story) {
@@ -131,6 +135,7 @@ public final class StoryRuntime {
         let top = spacerTops[state.slideIndex]
         let height = spacerHeights[state.slideIndex]
         let target = top + Double(state.slideProgress) * height
+        lastMirroredScrollY = target
         _ = JSObject.global.scrollTo!(0, target)
     }
 
@@ -178,7 +183,17 @@ public final class StoryRuntime {
         let window = JSObject.global.jsValue
         let scroll = JSClosure { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.pendingScrollY = JSObject.global.scrollY.number ?? 0
+                guard let self else { return }
+                let y = JSObject.global.scrollY.number ?? 0
+                // Drop the echo `scroll` that our own mirrorScrollFromPlayer()
+                // just caused. The browser quantizes scrollTo to device pixels, so
+                // letting the echo through re-seeks the playhead a sub-pixel shy of
+                // the boundary an arrow tween just landed on; nextStep/previousStep
+                // then treat that boundary as still-ahead and the next Right/Left
+                // arrow re-targets it instead of advancing. Real user scrolls move
+                // far more than this threshold.
+                if let mirrored = self.lastMirroredScrollY, abs(y - mirrored) < 2 { return }
+                self.pendingScrollY = y
             }
             return .undefined
         }
@@ -195,11 +210,7 @@ public final class StoryRuntime {
 
         let keyup = JSClosure { [weak self] arguments in
             let event = arguments.first ?? .undefined
-            MainActor.assumeIsolated {
-                guard let self, (event.key.string ?? "") == "Shift" else { return }
-                self.engine.isDebugOverlayActive = false
-                self.scene.dispatch(.keyUp("Shift"))
-            }
+            MainActor.assumeIsolated { self?.syncOverlayModifiers(event, isUp: true) }
             return .undefined
         }
         closures.append(keyup)
@@ -212,11 +223,21 @@ public final class StoryRuntime {
         case "ArrowUp": _ = event.preventDefault(); player.previousSlide()
         case "ArrowRight": _ = event.preventDefault(); player.nextStep()
         case "ArrowLeft": _ = event.preventDefault(); player.previousStep()
-        case "Shift":
-            engine.isDebugOverlayActive = true
-            scene.dispatch(.keyDown("Shift"))
-        default:
-            break
+        default: break
+        }
+        syncOverlayModifiers(event, isUp: false)
+    }
+
+    /// Shift → index overlay; Option+Shift → the interactive (draggable /
+    /// touchable) overlay. Recomputed from the live modifier flags so the modes
+    /// hand off as Option is pressed or released under Shift.
+    private func syncOverlayModifiers(_ event: JSValue, isUp: Bool) {
+        let shift = event.shiftKey.boolean ?? false
+        let alt = event.altKey.boolean ?? false
+        engine.isInteractiveOverlayActive = shift && alt
+        engine.isDebugOverlayActive = shift && !alt
+        if (event.key.string ?? "") == "Shift" {
+            scene.dispatch(isUp ? .keyUp("Shift") : .keyDown("Shift"))
         }
     }
 

@@ -33,17 +33,29 @@ final class InputBindings {
         listen(canvas, "pointermove") { [weak self] event in self?.pointerMove(event) }
         listen(canvas, "pointerup") { [weak self] event in self?.pointerUp(event) }
         listen(canvas, "pointercancel") { [weak self] event in self?.pointerCancel(event) }
+        // The browser does the double-click timing; we forward the debounced
+        // event (a MouseEvent — clientX/Y present, no pointerId/pointerType).
+        listen(canvas, "dblclick") { [weak self] event in self?.doubleClick(event) }
+        // Bare cursor left the canvas — drop any standing hover (idle only; a
+        // captured drag keeps receiving moves off-canvas).
+        listen(canvas, "pointerleave") { [weak self] _ in self?.pointerLeave() }
 
         let window = JSObject.global.jsValue
-        listen(window, "keydown") { [weak self] event in
-            guard let self, event.key.string == "Shift" else { return }
-            self.engine.isDebugOverlayActive = true
-            self.scene.dispatch(.keyDown("Shift"))
-        }
-        listen(window, "keyup") { [weak self] event in
-            guard let self, event.key.string == "Shift" else { return }
-            self.engine.isDebugOverlayActive = false
-            self.scene.dispatch(.keyUp("Shift"))
+        listen(window, "keydown") { [weak self] event in self?.syncOverlayModifiers(event, isUp: false) }
+        listen(window, "keyup") { [weak self] event in self?.syncOverlayModifiers(event, isUp: true) }
+    }
+
+    /// Shift → index overlay; Option+Shift → the interactive (draggable /
+    /// touchable) overlay. Recomputed from the live modifier flags on every key
+    /// event so the two modes hand off cleanly as Option is pressed or released
+    /// while Shift stays down.
+    private func syncOverlayModifiers(_ event: JSValue, isUp: Bool) {
+        let shift = event.shiftKey.boolean ?? false
+        let alt = event.altKey.boolean ?? false
+        engine.isInteractiveOverlayActive = shift && alt
+        engine.isDebugOverlayActive = shift && !alt
+        if event.key.string == "Shift" {
+            scene.dispatch(isUp ? .keyUp("Shift") : .keyDown("Shift"))
         }
     }
 
@@ -68,8 +80,15 @@ final class InputBindings {
     }
 
     private func pointerMove(_ event: JSValue) {
-        guard isActive(event) else { return }
-        scene.dispatch(.pointerMoved(worldPoint(event)), kind: activeKind, pressure: pressure(of: event))
+        if isActive(event) {
+            scene.dispatch(.pointerMoved(worldPoint(event)), kind: activeKind, pressure: pressure(of: event))
+        } else if activePointerID == nil {
+            // No gesture in flight: forward as a bare hover move so
+            // HoverComponents track the cursor. A non-active pointer *during* a
+            // gesture (second finger, palm) stays ignored. Touch/pen emit no
+            // moves while up, so this is the mouse-hover path in practice.
+            scene.dispatch(.pointerMoved(worldPoint(event)), kind: pointerKind(of: event))
+        }
     }
 
     private func pointerUp(_ event: JSValue) {
@@ -82,6 +101,15 @@ final class InputBindings {
         guard isActive(event) else { return }
         scene.dispatch(.pointerCancelled, kind: activeKind)
         endGesture()
+    }
+
+    private func doubleClick(_ event: JSValue) {
+        scene.dispatch(.doubleClick(worldPoint(event)))
+    }
+
+    private func pointerLeave() {
+        guard activePointerID == nil else { return }
+        scene.drag.clearHover()
     }
 
     private func endGesture() {

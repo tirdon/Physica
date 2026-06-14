@@ -99,9 +99,12 @@ public final class EquationRow: Layout {
         let token = tokens[index]
         let previous = tokens[index - 1]
         if token.glue { return 0 }
-        if token.kind == .equals || previous.kind == .equals { return style.equalsGap }
-        if token.kind == .op || previous.kind == .op { return style.opGap }
-        return style.interGap
+        // Gaps are em-relative (like the glyphs): scale them by the row's font
+        // size so a smaller equation keeps the same typographic spacing.
+        let em = style.fontSize
+        if token.kind == .equals || previous.kind == .equals { return style.equalsGap * em }
+        if token.kind == .op || previous.kind == .op { return style.opGap * em }
+        return style.interGap * em
     }
 }
 

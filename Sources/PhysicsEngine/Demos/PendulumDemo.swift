@@ -189,20 +189,41 @@ enum PendulumDemo {
         // ---- Charts: a Plane with animatable data — graph, field, streamlines.
         //      Position the plane before sampling: graphs copy its transform
         //      at creation (group explicitly to move them together later). ----
-		let plane = Plane(x: -3...3, y: -1.5...1.5, gridStep: 1, font: font).size(3, aspect: 2)
+        let plane = Plane(x: -3...3, y: -1.5...1.5, gridStep: 1, font: font).size(3, aspect: 2)
         plane.position = Position(0, 0.8, 0)
+        // The whole chart is ONE scene root, so the Shift overlay shows a single
+        // index for it (not one per piece) and the marker can ride it as a child.
+        // The pieces are still drawn individually below — `.draw` animates the
+        // existing plane children, it doesn't re-root them.
+        scene.add(plane)
         scene.play(
             .draw(plane.subgrid), .draw(plane.grid),
             .draw(plane.xAxis), .draw(plane.yAxis), .draw(plane.ticks),
             for: 1.s
         )
-        scene.add(plane.labels)  // TextEntity ticks pop in once the board is drawn
-		
+        // Tick labels are plane children now, so `scene.add(plane.labels)` would
+        // no-op (already in the scene via the plane). Hide them and fade in once
+        // the board is drawn — same "pop in after the board" beat as before.
+        var tickLabels: [TextEntity] = []
+        plane.labels.traverse {
+            if let label = $0 as? TextEntity { label.setOpacity(0); tickLabels.append(label) }
+        }
+        if !tickLabels.isEmpty {
+            scene.play { clip in
+                for label in tickLabels { clip.add(label.fade(to: 0.85), for: 0.5.s) }
+            }
+        }
+
         let wave = plane.graph(of: { x in Real.sin(x) }, color: .yellow)
         scene.play(.draw(wave), for: 1.s)
         let marker = Circle(radius: 0.09, color: .red)
-        marker.updater = { $0.position = wave.point(at: 1.2) }  // tracks the live curve
-        scene.add(marker)
+        marker.setOpacity(0)                                   // revealed after the curve
+        // A child of the plane, so it shares the chart's single debug index. Its
+        // position is plane-local, but `graph.point(at:)` is world — convert it
+        // back through the parent (the plane) to land on the live curve.
+        marker.updater = { $0.position = $0.parent?.convert(worldPosition: wave.point(at: 1.2)) ?? $0.position }
+        plane.addChild(marker)
+        scene.play(marker.fade(to: 1), for: 0.4.s)
         if plane.xLabels.children.count > 3 {
             // Group subscript: pick the "1" tick label out of the label group.
             scene.play(plane.xLabels[3].color(.teal), for: 0.5.s)
@@ -217,6 +238,16 @@ enum PendulumDemo {
         scene.play(.erase(field), .draw(flow), for: 1.s)
         scene.play(flow.plot { p in SIMD2(-p.y, p.x) }, for: 1.2.s)  // hyperbolas → orbits
         scene.wait()
+    }
+}
+
+private extension Entity {
+    /// Instant opacity set — the framework ships `fade(to:)` (animated) but no
+    /// direct setter, and these entities need to start hidden before their fade.
+    func setOpacity(_ value: Real) {
+        var style = components[RenderStyleComponent.self] ?? RenderStyleComponent()
+        style.opacity = value
+        components[RenderStyleComponent.self] = style
     }
 }
 #endif

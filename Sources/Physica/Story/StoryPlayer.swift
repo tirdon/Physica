@@ -45,45 +45,67 @@ public final class StoryPlayer {
 
     // MARK: Step navigation (Left / Right)
 
+    private var virtualBoundaries: [TimeInterval] {
+        var times: [TimeInterval] = []
+        let endTimes = story.slides.map { $0.endTime }
+        for time in boundaries {
+            if time > 1e-4 && endTimes.contains(where: { abs($0 - time) < Self.seekEpsilon }) {
+                times.append(time - 1e-5)
+            }
+            times.append(time)
+        }
+        return times
+    }
+
     /// Tween forward to the next step boundary (may roll into the next slide).
     public func nextStep() {
-        guard let next = boundaries.first(where: { $0 > scene.timeline.currentTime + Self.boundaryEpsilon }) else { return }
+        guard let next = virtualBoundaries.first(where: { $0 > scene.timeline.currentTime + Self.boundaryEpsilon }) else { return }
         beginTween(to: next)
     }
 
     /// Instant seek back to the previous step boundary.
     public func previousStep() {
-        guard let prev = boundaries.last(where: { $0 < scene.timeline.currentTime - Self.boundaryEpsilon }) else { return }
+        guard let prev = virtualBoundaries.last(where: { $0 < scene.timeline.currentTime - Self.boundaryEpsilon }) else { return }
         cancelTween()
-        apply(time: prev)
+        apply(time: prev, force: true)
         emitBoundary(at: prev)
     }
 
     // MARK: Slide navigation (Up / Down)
 
-    /// Tween forward into the next slide, far enough to play its opening clip
-    /// (the camera transition), then rest on its first internal boundary.
+    /// Tween forward to the end of the current slide.
     public func nextSlide() {
-        let target = currentSlideIndex + 1
-        guard target < story.slides.count else { return }
-        let slide = story.slides[target]
-        let landing = slide.stepBoundaries.count > 1 ? slide.stepBoundaries[1] : slide.endTime
-        beginTween(to: landing)
+        guard currentSlideIndex < story.slides.count else { return }
+        
+        let targetTime = story.slides[currentSlideIndex].endTime - 1e-5
+        if abs(scene.timeline.currentTime - targetTime) < Self.seekEpsilon {
+            let nextIndex = currentSlideIndex + 1
+            guard nextIndex < story.slides.count else { return }
+            beginTween(to: story.slides[nextIndex].endTime - 1e-5)
+        } else {
+            beginTween(to: targetTime)
+        }
     }
 
     /// Instant seek back to the previous slide's start.
     public func previousSlide() {
-        let target = currentSlideIndex - 1
-        guard target >= 0 else { return }
-        cancelTween()
-        apply(time: story.slides[target].startTime)
+        let currentStart = story.slides[currentSlideIndex].startTime
+        if scene.timeline.currentTime > currentStart + Self.seekEpsilon {
+            cancelTween()
+            apply(time: currentStart, force: true)
+        } else {
+            let target = currentSlideIndex - 1
+            guard target >= 0 else { return }
+            cancelTween()
+            apply(time: story.slides[target].startTime, force: true)
+        }
     }
 
     /// Instant seek to a slide's start.
     public func jump(toSlide index: Int) {
         guard index >= 0, index < story.slides.count else { return }
         cancelTween()
-        apply(time: story.slides[index].startTime)
+        apply(time: story.slides[index].startTime, force: true)
     }
 
     // MARK: Scrubbing (scroll)
@@ -125,7 +147,7 @@ public final class StoryPlayer {
             : Swift.max(now - stepAmount, tween.target)
         apply(time: next)
         if abs(next - tween.target) < Self.boundaryEpsilon {
-            apply(time: tween.target)  // exact snap onto the boundary
+            apply(time: tween.target, force: true)  // exact snap onto the boundary
             self.tween = nil
             emitBoundary(at: tween.target)
         }
@@ -166,9 +188,18 @@ public final class StoryPlayer {
 
     /// The one seek site: clamps, dedupes redundant seeks, then runs the
     /// slide-change hook if the slide index moved.
-    private func apply(time: TimeInterval) {
+    ///
+    /// `force` bypasses the dedup for the tween's landing snap. The dedup
+    /// (`seekEpsilon`, 1e-4) is ~100× looser than `boundaryEpsilon` (1e-6), so
+    /// when a tween creeps within `seekEpsilon` of its target boundary (easy in
+    /// 32-bit `Real` time on wasm) the un-forced final snap would be swallowed —
+    /// stranding the playhead a hair *short* of the boundary. `nextStep` then sees
+    /// it as "not there yet" and re-targets the same boundary, whose snap is
+    /// deduped again: the step sticks forever. Forcing the landing makes the snap
+    /// land exactly on the boundary so the next step can move on.
+    private func apply(time: TimeInterval, force: Bool = false) {
         let clamped = Swift.min(Swift.max(time, 0), scene.timeline.duration)
-        guard abs(clamped - lastSeekedTime) >= Self.seekEpsilon else { return }
+        guard force || abs(clamped - lastSeekedTime) >= Self.seekEpsilon else { return }
         let previous = currentSlideIndex
         scene.seek(to: clamped)
         lastSeekedTime = clamped
@@ -177,6 +208,7 @@ public final class StoryPlayer {
             currentSlideIndex = updated
             scene.interactions.interruptAll(in: scene)
             scene.drag.cancelActive(in: scene)
+            story.onSlideChanged?(previous, updated)
             emit(.slideChanged(from: previous, to: updated))
         }
     }

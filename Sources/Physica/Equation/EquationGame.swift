@@ -84,15 +84,29 @@ public final class EquationGame {
         guard let components else { return .rejected }
         do {
             let projected = try equation.current.projected(onto: axis, components: components)
-            consume(dragged)
+            scene.retire(dragged)  // the operator is one-shot — gone for good, even across scrubs
             let spawned = EquationEntity(projected, provider: provider, style: equation.style)
-            spawned.position = equation.position + Position(0, -(equation.worldBounds.size.y + 1), 0)
-            scene.insert(spawned)
             spawnedEquations.append(spawned)
+            scene.insert(spawned)
+            realignSpawnedEquations()
             onProjection?(axis, spawned)
             return .accepted
         } catch {
             return .rejected
+        }
+    }
+
+    /// Stacks every projected equation in a column beneath the source equation
+    /// so a second operator's result lands below the first instead of on top of
+    /// it (each spawn would otherwise key off the same `equation.position`).
+    private func realignSpawnedEquations() {
+        let step = equation.worldBounds.size.y + 1
+        for (index, spawned) in spawnedEquations.enumerated() {
+            spawned.position = Position(
+                equation.position.x,
+                equation.position.y - step * Real(index + 1),
+                equation.position.z
+            )
         }
     }
 

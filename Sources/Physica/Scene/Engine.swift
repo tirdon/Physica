@@ -9,6 +9,12 @@ public final class Engine {
     /// Shift held → snapshots include entity/group index labels.
     public var isDebugOverlayActive = false
 
+    /// Option+Shift held → the overlay labels only interactive (draggable /
+    /// touchable) entities, e.g. each equation token, instead of every index.
+    /// Mutually exclusive with `isDebugOverlayActive` — the input layer sets one
+    /// or the other from the live modifier flags.
+    public var isInteractiveOverlayActive = false
+
     private struct Binding {
         let scene: Scene
         let backend: any RenderBackend

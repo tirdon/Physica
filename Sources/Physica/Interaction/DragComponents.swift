@@ -110,6 +110,61 @@ public struct TapHandlerComponent: Component {
     public var debugString: String { "TapHandler\(isEnabled ? "" : "(disabled)")" }
 }
 
+/// Fires as the bare pointer (no button held) enters and leaves the entity's
+/// bounds — a mouse-hover affordance. The coordinator tracks it on idle pointer
+/// moves, independent of drags and of the paused gate, so it works while a story
+/// rests paused. Touch never hovers (a lifted finger emits no moves), so this is
+/// the mouse / pen-hover path in practice. Like the drop-target hover, the
+/// callback gets `true` on enter and `false` on leave; the `Entity` argument lets
+/// one shared closure serve many entities.
+public struct HoverComponent: Component {
+    public var isEnabled: Bool
+    public var onHoverChanged: @MainActor (Entity, Bool) -> Void
+
+    public init(isEnabled: Bool = true, onHoverChanged: @escaping @MainActor (Entity, Bool) -> Void) {
+        self.isEnabled = isEnabled
+        self.onHoverChanged = onHoverChanged
+    }
+
+    public var debugString: String { "Hover\(isEnabled ? "" : "(disabled)")" }
+}
+
+/// Double-click / double-tap handler. The platform layer maps the DOM
+/// `dblclick`; host tests dispatch `.doubleClick` directly. Like a tap handler it
+/// stays live regardless of `drag.isEnabled`, and a single click's `onTap` (if
+/// the entity also has one) still fires first — wire both only when you want
+/// both. The handler gets the entity, so the common "double-click me to
+/// highlight myself" reads as `entity.scene?.interact(.highlight(entity))` —
+/// see `.highlightSelf()`.
+public struct DoubleClickComponent: Component {
+    public var isEnabled: Bool
+    public var onDoubleClick: @MainActor (Entity) -> Void
+
+    public init(isEnabled: Bool = true, onDoubleClick: @escaping @MainActor (Entity) -> Void) {
+        self.isEnabled = isEnabled
+        self.onDoubleClick = onDoubleClick
+    }
+
+    public var debugString: String { "DoubleClick\(isEnabled ? "" : "(disabled)")" }
+}
+
+public extension DoubleClickComponent {
+    /// Double-click the entity to highlight *itself* — the neon loading-loop
+    /// around its own bounds. Runs on the interaction layer (`scene.interact`),
+    /// not the scrub timeline, so it fires live even while a story rests paused
+    /// and never lands in the scrubbable history.
+    ///
+    ///     star.components[DoubleClickComponent.self] = .highlightSelf()
+    static func highlightSelf(
+        color: Color = Color(hex: 0x53F0FF),
+        padding: Real = 0.3
+    ) -> DoubleClickComponent {
+        DoubleClickComponent { entity in
+            entity.scene?.interact(.highlight(entity, color: color, padding: padding))
+        }
+    }
+}
+
 /// Tuning for the coordinator. Top-level (the AxisOptions precedent): nested
 /// types inside a @MainActor class inherit its isolation.
 public struct DragOptions: Sendable {

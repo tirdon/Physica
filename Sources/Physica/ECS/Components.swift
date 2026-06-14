@@ -75,6 +75,21 @@ public struct Bounds: Sendable, Equatable {
     public var center: Position { isEmpty ? .zero : (min + max) / 2 }
     public var size: Position { isEmpty ? .zero : max - min }
 
+    /// The 8 box corners (every min/max combination); `empty` has none.
+    public var corners: [Position] {
+        if isEmpty { return [] }
+        var result: [Position] = []
+        result.reserveCapacity(8)
+        for cx in [min.x, max.x] {
+            for cy in [min.y, max.y] {
+                for cz in [min.z, max.z] {
+                    result.append(Position(cx, cy, cz))
+                }
+            }
+        }
+        return result
+    }
+
     public func union(_ other: Bounds) -> Bounds {
         if isEmpty { return other }
         if other.isEmpty { return self }

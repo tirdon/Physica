@@ -45,6 +45,11 @@ open class Entity: Animatable, HasTransform, Identifiable, Hashable {
     public internal(set) weak var parent: Entity?
     public internal(set) weak var scene: Scene?
 
+    /// Set once an entity is permanently removed: `Scene.insert` refuses to
+    /// re-add a retired entity, so an `add` clip replayed by a scrub won't
+    /// resurrect a one-shot tool (a consumed projection operator).
+    public internal(set) var isRetired = false
+
     public init() {
         self.id = Entity.nextID
         Entity.nextID += 1

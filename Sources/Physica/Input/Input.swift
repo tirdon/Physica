@@ -20,6 +20,12 @@ public enum InputEvent: Sendable, Equatable {
     /// there is no drop point: the in-flight drag is cancelled, not completed.
     /// Routine on touch and pen, rare with a mouse.
     case pointerCancelled
+    /// A double-click (DOM `dblclick`) / double-tap landed at this point. The
+    /// platform layer leaves the browser to do the timing — the core carries no
+    /// clock — so this arrives already debounced; host tests dispatch it
+    /// directly. The single-click `onTap` (if any) has already fired first, in
+    /// DOM order. Drives `DoubleClickComponent`.
+    case doubleClick(Position)
     case keyDown(String)
     case keyUp(String)
 }
@@ -68,6 +74,9 @@ extension Scene {
         case .pointerCancelled:
             pointer.isDown = false
             pointer.pressure = 0
+        case .doubleClick(let position):
+            // A discrete click, not a press: position tracks, button state doesn't.
+            pointer.position = position
         case .keyDown, .keyUp:
             break
         }
@@ -100,37 +109,87 @@ extension Scene {
     }
 
     /// Index labels for the Shift debug overlay — cheap, no geometry flattening.
-    /// Invisible entities (faded to ~0 opacity; groups with nothing visible
-    /// beneath them) get no label. Index paths stay positional, so visible
-    /// siblings keep their numbering.
+    /// One label per top-level entity at its center: a group (equation, plane,
+    /// chip, plain `Group`, …) collapses to a single index rather than unfolding
+    /// its children into a `0.0`/`6.0.0` thicket stacked near the group center.
+    /// Invisible roots (faded to ~0 opacity; groups with nothing visible beneath
+    /// them) get no label, and the index stays positional so the remaining
+    /// siblings keep their numbering. Per-element detail (equation tokens, …)
+    /// lives in the Option+Shift interactive overlay.
     public func collectDebugLabels() -> [DebugLabel] {
-        func isVisible(_ entity: Entity) -> Bool {
-            if let style = entity.components[RenderStyleComponent.self] {
-                return style.opacity > 0.001
-            }
-            if let model = entity.components[ModelComponent.self] {
-                return model.opacity > 0.001
-            }
-            if let group = entity as? Group {
-                return group.children.contains { isVisible($0) }
-            }
-            return true  // bare entity — nothing renderable to be invisible
-        }
-
         var labels: [DebugLabel] = []
-        func walk(_ entity: Entity, _ path: String) {
-            if isVisible(entity) {
-                labels.append(DebugLabel(text: path, worldPosition: entity.center))
-            }
-            if let group = entity as? Group {
-                for (index, child) in group.children.enumerated() {
-                    walk(child, "\(path).\(index)")
-                }
-            }
-        }
-        for (index, root) in entities.enumerated() {
-            walk(root, "\(index)")
+        for (index, root) in entities.enumerated() where debugLabelVisible(root) {
+            labels.append(DebugLabel(text: "\(index)", worldPosition: root.center))
         }
         return labels
+    }
+
+    /// Labels for the Option+Shift overlay: only entities the user can grab or
+    /// touch (draggable / drop target / tap / double-click / hover). Built for
+    /// inspecting equation elements — every draggable token earns its own label
+    /// instead of the equation group collapsing to a single index on the '='
+    /// sign. Each label is a flat sequential number (no dotted path) carrying its
+    /// interaction kind, which the overlay renders as a color rather than text.
+    public func collectInteractiveDebugLabels() -> [DebugLabel] {
+        var labels: [DebugLabel] = []
+        func walk(_ entity: Entity) {
+            if debugLabelVisible(entity), let kind = interactionKind(of: entity) {
+                labels.append(DebugLabel(
+                    text: "\(labels.count + 1)", worldPosition: entity.center, interaction: kind
+                ))
+            }
+            if let group = entity as? Group {
+                for child in group.children { walk(child) }
+            }
+        }
+        for root in entities { walk(root) }
+        return labels
+    }
+
+    /// World-space hit regions of every visible drop target, for the Option+Shift
+    /// overlay to outline — so the user sees *where* a dragged token can land, not
+    /// just that an entity accepts drops. Same walk as the interactive labels
+    /// (groups recurse, invisible roots skipped); one box per `DropTargetComponent`
+    /// (a group that is itself a target contributes its whole union bound).
+    public func collectDropAreas() -> [Bounds] {
+        var areas: [Bounds] = []
+        func walk(_ entity: Entity) {
+            if debugLabelVisible(entity), entity.components[DropTargetComponent.self] != nil {
+                areas.append(entity.worldBounds)
+            }
+            if let group = entity as? Group {
+                for child in group.children { walk(child) }
+            }
+        }
+        for root in entities { walk(root) }
+        return areas
+    }
+
+    /// A faded-to-invisible entity (or a group with nothing visible beneath it)
+    /// gets no overlay label; a bare entity with no renderable component counts
+    /// as visible.
+    private func debugLabelVisible(_ entity: Entity) -> Bool {
+        if let style = entity.components[RenderStyleComponent.self] {
+            return style.opacity > 0.001
+        }
+        if let model = entity.components[ModelComponent.self] {
+            return model.opacity > 0.001
+        }
+        if let group = entity as? Group {
+            return group.children.contains { debugLabelVisible($0) }
+        }
+        return true  // bare entity — nothing renderable to be invisible
+    }
+
+    /// The entity's primary interaction kind (drag > drop > tap > double-click >
+    /// hover when it carries several), or nil when it has none — which is how the
+    /// interactive overlay skips it. The overlay colors the label by this.
+    private func interactionKind(of entity: Entity) -> InteractionKind? {
+        if entity.components[DraggableComponent.self] != nil { return .drag }
+        if entity.components[DropTargetComponent.self] != nil { return .drop }
+        if entity.components[TapHandlerComponent.self] != nil { return .tap }
+        if entity.components[DoubleClickComponent.self] != nil { return .doubleClick }
+        if entity.components[HoverComponent.self] != nil { return .hover }
+        return nil
     }
 }

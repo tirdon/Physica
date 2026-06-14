@@ -60,22 +60,68 @@ public final class Story {
     public private(set) var slides: [Slide] = []
     private var actions: [StoryAction] = []
 
+    // Story content persists by default (a slide takes things off the board with
+    // `s.clear`/`s.clearAll`). We track two things for those: the globals
+    // (`scene.add`ed before/between slides) that `clearAll()` must keep, and each
+    // slide's own new entities so the next slide's `addLastState()` can re-pull
+    // them after a clear.
+    private var globalIDs: Set<ObjectIdentifier> = []
+    private var accountedClips = 0
+    private var lastIntroducedOwn: [Entity] = []
+
+    /// Invoked by the `StoryPlayer`'s slide-change hook (with from/to indices)
+    /// whenever the current slide changes. Use it to reset transient,
+    /// interaction-introduced state that should not persist when the viewer
+    /// navigates away and back (those entities are outside the scrub history,
+    /// so a seek never clears them).
+    public var onSlideChanged: (@MainActor (_ from: Int, _ to: Int) -> Void)?
+
     public init(scene: Scene, options: StoryOptions = StoryOptions()) {
         self.scene = scene
         self.options = options
     }
 
-    /// Records a slide: snapshots `timeline.duration` before and after running
-    /// `content` (which scripts clips on the scene), then derives the slide's
-    /// range and step boundaries. The content must enqueue at least one clip.
+    /// Records a slide. Content **persists by default**; a slide clears the board
+    /// itself with `s.clearAll()` (keeps the globals) or `s.clear(x)` (specific),
+    /// and re-pulls the previous slide's new content with `s.addLastState()` after
+    /// a clear. Globals are anything `scene.add`ed *before* the slides.
+    ///
+    /// Mechanics: snapshots `timeline.duration` / clip count around `content`,
+    /// derives the slide's range and step boundaries, and records the slide's own
+    /// new entities (for the next `addLastState`) and the running global set (for
+    /// `clearAll`). The content must enqueue at least one clip.
     @discardableResult
     public func slide(_ title: String, _ content: (Scene) -> Void) -> Slide {
+        // Anything enqueued since the last slide (globals `scene.add`ed before or
+        // between slides) is recorded as global, so `clearAll()` keeps it.
+        absorbGlobals()
+        scene.storyGlobalIDs = globalIDs
+        // Fire the *previous* slide's deferred clearAll() now (at this slide's
+        // start) — before this slide's content, so a clearAll()+addLastState()
+        // pair reads as clear-then-re-add across the boundary.
+        scene.flushPendingClearAll()
+
         let startTime = scene.timeline.duration
         let startClip = scene.timeline.clips.count
+        scene.beginSlideCarry(previous: lastIntroducedOwn)
         content(scene)
         let endClip = scene.timeline.clips.count
-        precondition(endClip > startClip, "Story slide '\(title)' enqueued no clips")
+        // A slide may be timeline-empty when it only inherits globals and defers a
+        // clearAll (e.g. a degraded no-font slide); that pending clear counts as
+        // intent, so only an inert slide that did nothing at all trips this.
+        precondition(endClip > startClip || scene.clearAllPending,
+                     "Story slide '\(title)' enqueued no clips")
         let endTime = scene.timeline.duration
+
+        // This slide's *own* new (non-global) entities — excluding what it pulled in
+        // via `addLastState` — seed the next slide's `addLastState`, so carry-over is
+        // one step, not transitive.
+        let introduced = introducedEntities(in: startClip..<endClip)
+        let carriedIn = Set(scene.carriedThisSlide.map(ObjectIdentifier.init))
+        lastIntroducedOwn = introduced.filter {
+            !globalIDs.contains(ObjectIdentifier($0)) && !carriedIn.contains(ObjectIdentifier($0))
+        }
+        accountedClips = scene.timeline.clips.count
 
         var boundaries: [TimeInterval] = [startTime]
         var cursor = startTime
@@ -94,6 +140,33 @@ public final class Story {
         )
         slides.append(slide)
         return slide
+    }
+
+    /// Records every entity introduced by clips not yet attributed to a slide
+    /// (the `scene.add` calls made before/between slides) as global.
+    private func absorbGlobals() {
+        let end = scene.timeline.clips.count
+        guard accountedClips < end else { return }
+        for entity in introducedEntities(in: accountedClips..<end) {
+            globalIDs.insert(ObjectIdentifier(entity))
+        }
+        accountedClips = end
+    }
+
+    /// Deduped entities introduced (via any `AddEntitiesTrack`) by the clips in
+    /// `range` — the build-time view of what those clips put on screen.
+    private func introducedEntities(in range: Range<Int>) -> [Entity] {
+        var result: [Entity] = []
+        var seen = Set<ObjectIdentifier>()
+        for index in range {
+            for track in scene.timeline.clips[index].tracks {
+                guard let add = track as? AddEntitiesTrack else { continue }
+                for entity in add.introducedTargets where seen.insert(ObjectIdentifier(entity)).inserted {
+                    result.append(entity)
+                }
+            }
+        }
+        return result
     }
 
     /// Registers a triggerable action. `id` defaults to `label`; later

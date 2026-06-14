@@ -72,6 +72,20 @@ import Testing
         #expect(!tapped)
     }
 
+    @Test func grabOffsetAnchorsToPressNotPostSlop() {
+        // A fast first move (flick) jumps far past the slop in one event. The
+        // grab must stay anchored to the press point, so the spot the finger
+        // touched keeps sitting under the pointer — the flick distance must not
+        // leak into the offset and push the payload away.
+        let scene = Scene()
+        let dot = draggable(scene, at: .zero) // radius 0.5, center at origin
+        scene.dispatch(.pointerDown(Position(0.3, 0, 0)))  // off-center grab, within slop
+        scene.dispatch(.pointerMoved(Position(2, 0, 0)))   // big first move past 0.12 slop
+        // center should trail the pointer by the press offset (0.3), so the
+        // grabbed point lands under the pointer: 2 - 0.3 = 1.7.
+        #expect(abs(dot.position.x - 1.7) < tolerance)
+    }
+
     @Test func tapHandlerReceivesTap() {
         let scene = Scene()
         var tapped = false
@@ -156,6 +170,112 @@ import Testing
         scene.dispatch(.pointerMoved(.zero))                // exit
         scene.dispatch(.pointerUp(.zero))
         #expect(hoverStates == [true, false])
+    }
+
+    // MARK: HoverComponent (bare-pointer hover, no button held)
+
+    @Test func hoverComponentTracksBarePointer() {
+        let scene = Scene()
+        var states: [Bool] = []
+        let box = Circle(radius: 0.5)
+        box.position = Position(3, 0, 0)
+        box.components[HoverComponent.self] = HoverComponent { _, over in states.append(over) }
+        scene.add(box)
+        scene.seek(to: 0) // pauses — hover is pause-independent, like drag
+
+        scene.dispatch(.pointerMoved(Position(3, 0, 0))) // bare move onto the box → enter
+        scene.dispatch(.pointerMoved(Position(3.1, 0, 0))) // still over it → no re-fire
+        scene.dispatch(.pointerMoved(.zero))               // off the box → leave
+        #expect(states == [true, false])
+        #expect(!scene.pointer.isDown) // never pressed
+    }
+
+    @Test func clearHoverFiresLeave() {
+        let scene = Scene()
+        var states: [Bool] = []
+        let box = Circle(radius: 0.5)
+        box.components[HoverComponent.self] = HoverComponent { _, over in states.append(over) }
+        scene.add(box)
+        scene.seek(to: 0)
+
+        scene.dispatch(.pointerMoved(.zero)) // enter
+        scene.drag.clearHover()              // cursor left the canvas
+        #expect(states == [true, false])
+    }
+
+    @Test func hoverTopmostPaintedWins() {
+        let scene = Scene()
+        var lowerEntered = false
+        var upperEntered = false
+        let lower = Circle(radius: 0.5)
+        let upper = Circle(radius: 0.5)
+        lower.components[HoverComponent.self] = HoverComponent { _, over in if over { lowerEntered = true } }
+        upper.components[HoverComponent.self] = HoverComponent { _, over in if over { upperEntered = true } }
+        scene.add(lower, upper) // upper painted last → on top
+        scene.seek(to: 0)
+
+        scene.dispatch(.pointerMoved(.zero))
+        #expect(!lowerEntered)
+        #expect(upperEntered)
+    }
+
+    // MARK: Double-click
+
+    @Test func doubleClickFiresOnTopmost() {
+        let scene = Scene()
+        var clicked: Entity?
+        let lower = Circle(radius: 0.5)
+        let upper = Circle(radius: 0.5)
+        lower.components[DoubleClickComponent.self] = DoubleClickComponent { _ in clicked = lower }
+        upper.components[DoubleClickComponent.self] = DoubleClickComponent { e in clicked = e }
+        scene.add(lower, upper) // upper on top
+        scene.seek(to: 0)
+
+        scene.dispatch(.doubleClick(.zero))
+        #expect(clicked === upper) // topmost, and the handler got its own entity
+    }
+
+    @Test func doubleClickMissesEmptySpace() {
+        let scene = Scene()
+        var fired = false
+        let box = Circle(radius: 0.5)
+        box.components[DoubleClickComponent.self] = DoubleClickComponent { _ in fired = true }
+        scene.add(box)
+        scene.seek(to: 0)
+
+        scene.dispatch(.doubleClick(Position(5, 5, 0))) // nowhere near the box
+        #expect(!fired)
+    }
+
+    @Test func doubleClickStaysLiveWhileDragDisabled() {
+        let scene = Scene()
+        var fired = false
+        let box = Circle(radius: 0.5)
+        box.components[DoubleClickComponent.self] = DoubleClickComponent { _ in fired = true }
+        scene.add(box)
+        scene.seek(to: 0)
+
+        scene.drag.isEnabled = false // chips up — a discrete click is not a drag grab
+        scene.dispatch(.doubleClick(.zero))
+        #expect(fired)
+    }
+
+    @Test func doubleClickHighlightsItself() {
+        let scene = Scene()
+        let star = Circle(radius: 0.5)
+        star.position = Position(1, 0, 0)
+        star.components[DoubleClickComponent.self] = .highlightSelf()
+        scene.add(star)
+        scene.seek(to: 0)
+
+        scene.dispatch(.doubleClick(Position(1, 0, 0)))
+        // The neon loop runs NOW on the interaction layer (works while paused).
+        #expect(!scene.interactions.isIdle)
+        #expect(scene.entities.contains { $0.name == "highlight" })
+
+        scene.update(deltaTime: 1.3) // past the 1.2 s default lap
+        #expect(scene.interactions.isIdle)
+        #expect(!scene.entities.contains { $0.name == "highlight" }) // border cleaned up
     }
 
     @Test func proxyFollowsSourceStaysRemovedAfterReject() {

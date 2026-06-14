@@ -84,6 +84,27 @@ import Testing
         #expect(abs(scene.timeline.currentTime - 1) < tolerance) // no overshoot
     }
 
+    /// Regression: a tween that creeps to within the seek-dedup epsilon (1e-4) of
+    /// its target must still land *exactly* on the boundary. Pre-fix the final
+    /// snap was deduped, stranding the playhead ~5e-5 short; `nextStep` then
+    /// re-targeted the same boundary and its snap was deduped too, so Right-arrow
+    /// stepping stuck forever (intermittent in the browser — frame-time jitter
+    /// decides whether a tween lands inside the dead zone).
+    @Test func stepLandsExactlyEvenWhenApproachingWithinSeekEpsilon() {
+        let (scene, story, _, _) = makeStory()
+        let player = StoryPlayer(story: story)
+        player.nextStep()                      // tween 0 → boundary 1
+        player.tick(deltaTime: 0.499975)       // 2 × 0.499975 = 0.99995 (within 1e-4 of 1)
+        player.tick(deltaTime: 1.0)            // overshoots → clamps to 1 → must snap exactly
+        #expect(!player.isTweening)
+        #expect(abs(scene.timeline.currentTime - 1) < 1e-6)   // exact, not 0.99995
+
+        // The next step must advance to boundary 2, not re-stick on 1.
+        player.nextStep()
+        runTweens(player)
+        #expect(abs(scene.timeline.currentTime - 2) < tolerance)
+    }
+
     @Test func previousStepIsInstant() {
         let (scene, story, _, _) = makeStory()
         let player = StoryPlayer(story: story)
@@ -111,7 +132,7 @@ import Testing
         #expect(player.isTweening)
         runTweens(player)
         #expect(player.currentSlideIndex == 1)
-        #expect(abs(scene.timeline.currentTime - 4) < tolerance) // slide 1's only inner boundary
+        #expect(abs(scene.timeline.currentTime - 2) < tolerance) // lands at slide 1's start
     }
 
     @Test func previousSlideIsInstant() {
@@ -128,11 +149,80 @@ import Testing
     @Test func backwardScrubRewindsLaterSlideEntities() {
         let (scene, story, a, b) = makeStory()
         let player = StoryPlayer(story: story)
-        player.scrub(globalProgress: 1.0) // time 4 — everything present
+        player.scrub(globalProgress: 1.0) // time 4 — everything present (persists by default)
         #expect(scene.entities.contains { $0 === b })
         player.scrub(globalProgress: 0.0) // back to start
         #expect(!scene.entities.contains { $0 === b }) // slide-1 add rewound
         #expect(scene.entities.contains { $0 === a })  // slide-0 add still applied
+    }
+
+    @Test func clearRemovesSpecificEntitiesScrubSafely() {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        let a = Circle(radius: 0.2)
+        let b = Circle(radius: 0.2)
+        story.slide("one") { s in
+            s.add(a, b)
+            s.play(a.move(to: Position(1, 0, 0)), for: 1.s)
+        }
+        story.slide("two") { s in
+            s.clear(a)                                       // drop just `a`; `b` persists
+            s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
+        }
+        let player = StoryPlayer(story: story)
+        player.scrub(slide: 1, progress: 0.5)
+        #expect(!scene.entities.contains { $0 === a })       // cleared
+        #expect(scene.entities.contains { $0 === b })        // persists (default)
+        player.scrub(slide: 0, progress: 0.5)
+        #expect(scene.entities.contains { $0 === a })        // scrub back re-inserts
+    }
+
+    @Test func clearAllDefersToNextSlideKeepingGlobals() {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        let bar = Rectangle(width: 1, height: 0.2)   // global (added before slides)
+        let note = Circle(radius: 0.2)               // slide content
+        scene.add(bar)
+        story.slide("one") { s in
+            s.add(note)
+            s.play(note.move(to: Position(1, 0, 0)), for: 1.s)
+            s.clearAll()                                     // deferred — fires at slide two
+        }
+        story.slide("two") { s in
+            s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
+        }
+        let player = StoryPlayer(story: story)
+        player.scrub(slide: 0, progress: 0.5)
+        #expect(scene.entities.contains { $0 === note })     // deferred: still present in slide one
+        player.scrub(slide: 1, progress: 0.5)
+        #expect(!scene.entities.contains { $0 === note })    // fires entering slide two
+        #expect(scene.entities.contains { $0 === bar })      // global kept
+        player.scrub(slide: 0, progress: 0.5)
+        #expect(scene.entities.contains { $0 === note })     // scrub back re-inserts
+    }
+
+    @Test func addLastStateReaddsPreviousSlideOnlyOneStep() {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        let token = Circle(radius: 0.2)
+        story.slide("intro") { s in
+            s.add(token)
+            s.play(token.move(to: Position(1, 0, 0)), for: 1.s)
+            s.clearAll()                                     // deferred — clears `token` entering keep
+        }
+        story.slide("keep") { s in
+            s.addLastState()                                 // re-pull intro's `token` after the clear
+            s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
+            s.clearAll()                                     // deferred — clears it again entering drop
+        }
+        story.slide("drop") { s in
+            s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)   // no addLastState
+        }
+        let player = StoryPlayer(story: story)
+        player.scrub(slide: 1, progress: 0.5)
+        #expect(scene.entities.contains { $0 === token })    // re-added one step forward
+        player.scrub(slide: 2, progress: 0.5)
+        #expect(!scene.entities.contains { $0 === token })   // not carried transitively
     }
 
     @Test func subEpsilonScrubIsDeduped() {
@@ -186,6 +276,20 @@ import Testing
         player.trigger(actionID: "reveal")
         // `.draw` introduces its target at clip begin — visible immediately.
         #expect(scene.entities.contains { $0 === shape })
+    }
+
+    @Test func onSlideChangedHookFiresWithIndices() {
+        let (_, story, _, _) = makeStory()
+        var changes: [(from: Int, to: Int)] = []
+        story.onSlideChanged = { from, to in changes.append((from, to)) }
+        let player = StoryPlayer(story: story)
+        player.scrub(globalProgress: 0.75) // 0 → 3, crosses into slide 1
+        #expect(changes.count == 1)
+        #expect(changes.first?.from == 0)
+        #expect(changes.first?.to == 1)
+        // A scrub within the same slide does not re-fire it.
+        player.scrub(slide: 1, progress: 0.75)
+        #expect(changes.count == 1)
     }
 
     @Test func eventStreamDeliversSlideChanged() async {
