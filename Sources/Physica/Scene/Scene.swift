@@ -314,49 +314,6 @@ public final class Scene: Identifiable {
         return (clip, pairs)
     }
 
-    // MARK: Interactions — parallel clips OUTSIDE the scrub history
-
-    /// Plays NOW, in parallel with the timeline (even while it is paused at a
-    /// story step). Same surface as `play` — moves, write/draw/erase,
-    /// highlight, shake all work — but the clip is not part of the scrubbable
-    /// history: seeking never touches it, and entities it introduces persist
-    /// across scrubs (the same policy as system-driven state). `onInterrupt`
-    /// decides what a slide change does to the clip mid-flight.
-    @discardableResult
-    public func interact(
-        _ items: any Animatable...,
-        for duration: Duration? = nil,
-        easing: Easing? = nil,
-        onInterrupt: InterruptionPolicy = .complete,
-        completion: (@MainActor () -> Void)? = nil
-    ) -> InteractionRunner.Handle {
-        interactItems(items, for: duration, easing: easing, onInterrupt: onInterrupt, completion: completion)
-    }
-
-    /// Concrete overload so leading-dot factories resolve:
-    /// `scene.interact(.highlight(box))`, `scene.interact(.shake(token))`.
-    @discardableResult
-    public func interact(
-        _ items: Animation...,
-        for duration: Duration? = nil,
-        easing: Easing? = nil,
-        onInterrupt: InterruptionPolicy = .complete,
-        completion: (@MainActor () -> Void)? = nil
-    ) -> InteractionRunner.Handle {
-        interactItems(items, for: duration, easing: easing, onInterrupt: onInterrupt, completion: completion)
-    }
-
-    func interactItems(
-        _ items: [any Animatable],
-        for duration: Duration?,
-        easing: Easing?,
-        onInterrupt: InterruptionPolicy,
-        completion: (@MainActor () -> Void)?
-    ) -> InteractionRunner.Handle {
-        let baked = bakeClip(items, for: duration, easing: easing)
-        return interactions.run(clip: baked.clip, policy: onInterrupt, in: self, completion: completion)
-    }
-
     /// Idle clip — timeline time passes, custom systems keep updating.
     @discardableResult
     public func wait(_ duration: Duration = .seconds(1)) -> Animation {
@@ -420,54 +377,5 @@ public final class Scene: Identifiable {
     public var debugString: String {
         let entityLines = entities.map { "  " + $0.debugString }
         return "Scene '\(name)' entities(\(entities.count)):\n" + entityLines.joined(separator: "\n")
-    }
-}
-
-/// Collects animations for the composer form of `scene.play { clip in ... }`.
-/// Each `add` keeps its own duration/offset/easing; everything lands in one clip.
-@MainActor
-public final class ClipComposer {
-    var animations: [Animation] = []
-
-    @discardableResult
-    public func add(
-        _ item: any Animatable,
-        for duration: Duration? = nil,
-        offset: Duration? = nil,
-        easing: Easing? = nil
-    ) -> Animation {
-        let base = item as? Animation
-        let animation = Animation(
-            pairs: item.carriedBlueprints,
-            duration: duration ?? base?.duration,
-            offset: offset ?? base?.offset ?? .zero,
-            easing: easing ?? base?.easing
-        )
-        animations.append(animation)
-        return animation
-    }
-
-    /// Concrete overload so leading-dot factories resolve:
-    /// `clip.add(.erase(shape), for: 1.s)`.
-    @discardableResult
-    public func add(
-        _ animation: Animation,
-        for duration: Duration? = nil,
-        offset: Duration? = nil,
-        easing: Easing? = nil
-    ) -> Animation {
-        add(animation as any Animatable, for: duration, offset: offset, easing: easing)
-    }
-}
-
-/// No-op blueprint used when an API must return an Animation without scheduling work.
-struct IdentityBlueprint: AnimationBlueprint {
-    var defaultDuration: Duration { .zero }
-    var debugLabel: String { "identity" }
-
-    func makeTrack(
-        target: Entity, duration: TimeInterval, offset: TimeInterval, easing: Easing, in scene: Scene
-    ) -> any AnimationTrackProtocol {
-        WaitTrack(duration: 0)
     }
 }
