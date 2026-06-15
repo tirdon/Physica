@@ -262,6 +262,11 @@ final class RemoveEntityTrack: AnimationTrackProtocol {
         self.label = "remove(\(name(of: entity)))"
     }
 
+    /// The entity this track removes — `Story` reads it to exclude net-transient
+    /// entities (a `.fade` overlay, a `.highlight` border introduced *and* removed
+    /// inside one slide) from the slide's carry-forward set.
+    var removedTarget: Entity { entity }
+
     func begin(in scene: Scene) {
         guard !hasBegun else { return }
         hasBegun = true
@@ -292,11 +297,11 @@ final class RemoveEntityTrack: AnimationTrackProtocol {
 /// (the story's globals). What it removes is captured at `begin` (runtime), so
 /// it is accurate at the timeline point it actually plays, and scrubbing back
 /// re-inserts each at its original depth (ascending, so the indices rebuild the
-/// original order). Powers `Scene.clearAll()`.
+/// original order). Powers `Scene.clear()`.
 ///
 /// The sentinel duration (1e-7) is below the step-boundary collapse threshold
 /// (1e-6), so it introduces no extra step. The `> 0` apply condition means
-/// seeking *to* the clearAll's start time (landing on the slide boundary) does
+/// seeking *to* the clear's start time (landing on the slide boundary) does
 /// not fire the clear — only advancing *past* it (right arrow / scroll) does.
 /// This keeps the previous slide's content visible until the viewer explicitly
 /// moves forward.
@@ -306,7 +311,7 @@ final class ClearAllTrack: AnimationTrackProtocol {
     /// (< 1e-6), large enough that `apply(at: duration)` satisfies `> 0`.
     let duration: TimeInterval = 1e-7
     let offset: TimeInterval = 0
-    let label = "clearAll()"
+    let label = "clear()"
 
     private let protectedIDs: Set<ObjectIdentifier>
     private var captured = false

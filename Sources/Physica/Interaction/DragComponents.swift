@@ -98,7 +98,7 @@ public struct DropTargetComponent: Component {
 
 /// Tap-only handler (the choice chips). Works even while dragging is disabled,
 /// so the user can still resolve a choice with `drag.isEnabled == false`.
-public struct TapHandlerComponent: Component {
+public struct TapComponent: Component {
     public var isEnabled: Bool
     public var onTap: @MainActor (Entity) -> Void
 
@@ -107,7 +107,7 @@ public struct TapHandlerComponent: Component {
         self.onTap = onTap
     }
 
-    public var debugString: String { "TapHandler\(isEnabled ? "" : "(disabled)")" }
+    public var debugString: String { "Tap\(isEnabled ? "" : "(disabled)")" }
 }
 
 /// Fires as the bare pointer (no button held) enters and leaves the entity's
@@ -136,30 +136,30 @@ public struct HoverComponent: Component {
 /// both. The handler gets the entity, so the common "double-click me to
 /// highlight myself" reads as `entity.scene?.interact(.highlight(entity))` —
 /// see `.highlightSelf()`.
-public struct DoubleClickComponent: Component {
+public struct DoubleTapComponent: Component {
     public var isEnabled: Bool
-    public var onDoubleClick: @MainActor (Entity) -> Void
+    public var onDoubleTap: @MainActor (Entity) -> Void
 
-    public init(isEnabled: Bool = true, onDoubleClick: @escaping @MainActor (Entity) -> Void) {
+    public init(isEnabled: Bool = true, onDoubleTap: @escaping @MainActor (Entity) -> Void) {
         self.isEnabled = isEnabled
-        self.onDoubleClick = onDoubleClick
+        self.onDoubleTap = onDoubleTap
     }
 
-    public var debugString: String { "DoubleClick\(isEnabled ? "" : "(disabled)")" }
+    public var debugString: String { "DoubleTap\(isEnabled ? "" : "(disabled)")" }
 }
 
-public extension DoubleClickComponent {
+public extension DoubleTapComponent {
     /// Double-click the entity to highlight *itself* — the neon loading-loop
     /// around its own bounds. Runs on the interaction layer (`scene.interact`),
     /// not the scrub timeline, so it fires live even while a story rests paused
     /// and never lands in the scrubbable history.
     ///
-    ///     star.components[DoubleClickComponent.self] = .highlightSelf()
+    ///     star.components[DoubleTapComponent.self] = .highlightSelf()
     static func highlightSelf(
         color: Color = Color(hex: 0x53F0FF),
         padding: Real = 0.3
-    ) -> DoubleClickComponent {
-        DoubleClickComponent { entity in
+    ) -> DoubleTapComponent {
+        DoubleTapComponent { entity in
             entity.scene?.interact(.highlight(entity, color: color, padding: padding))
         }
     }

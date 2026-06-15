@@ -24,7 +24,7 @@ public enum InputEvent: Sendable, Equatable {
     /// platform layer leaves the browser to do the timing — the core carries no
     /// clock — so this arrives already debounced; host tests dispatch it
     /// directly. The single-click `onTap` (if any) has already fired first, in
-    /// DOM order. Drives `DoubleClickComponent`.
+    /// DOM order. Drives `DoubleTapComponent`.
     case doubleClick(Position)
     case keyDown(String)
     case keyUp(String)
@@ -187,8 +187,8 @@ extension Scene {
     private func interactionKind(of entity: Entity) -> InteractionKind? {
         if entity.components[DraggableComponent.self] != nil { return .drag }
         if entity.components[DropTargetComponent.self] != nil { return .drop }
-        if entity.components[TapHandlerComponent.self] != nil { return .tap }
-        if entity.components[DoubleClickComponent.self] != nil { return .doubleClick }
+        if entity.components[TapComponent.self] != nil { return .tap }
+        if entity.components[DoubleTapComponent.self] != nil { return .doubleClick }
         if entity.components[HoverComponent.self] != nil { return .hover }
         return nil
     }

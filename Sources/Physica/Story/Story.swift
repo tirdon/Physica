@@ -61,8 +61,8 @@ public final class Story {
     private var actions: [StoryAction] = []
 
     // Story content persists by default (a slide takes things off the board with
-    // `s.clear`/`s.clearAll`). We track two things for those: the globals
-    // (`scene.add`ed before/between slides) that `clearAll()` must keep, and each
+    // `s.clear`/`s.clear`). We track two things for those: the globals
+    // (`scene.add`ed before/between slides) that `clear()` must keep, and each
     // slide's own new entities so the next slide's `addLastState()` can re-pull
     // them after a clear.
     private var globalIDs: Set<ObjectIdentifier> = []
@@ -82,28 +82,35 @@ public final class Story {
     }
 
     /// Records a slide. Content **persists by default**; a slide clears the board
-    /// itself with `s.clearAll()` (keeps the globals) or `s.clear(x)` (specific),
+    /// itself with `s.clear()` (keeps the globals) or `s.clear(x)` (specific),
     /// and re-pulls the previous slide's new content with `s.addLastState()` after
     /// a clear. Globals are anything `scene.add`ed *before* the slides.
     ///
     /// Mechanics: snapshots `timeline.duration` / clip count around `content`,
     /// derives the slide's range and step boundaries, and records the slide's own
     /// new entities (for the next `addLastState`) and the running global set (for
-    /// `clearAll`). The content must enqueue at least one clip.
+    /// `clear`). The content must enqueue at least one clip.
     @discardableResult
-    public func slide(_ title: String, _ content: (Scene) -> Void) -> Slide {
+    public func slide(
+        _ title: String,
+        transition: SlideTransition = .none,
+        _ content: (Scene) -> Void
+    ) -> Slide {
         // Anything enqueued since the last slide (globals `scene.add`ed before or
-        // between slides) is recorded as global, so `clearAll()` keeps it.
+        // between slides) is recorded as global, so `clear()` keeps it.
         absorbGlobals()
         scene.storyGlobalIDs = globalIDs
-        // Fire the *previous* slide's deferred clearAll() now (at this slide's
-        // start) — before this slide's content, so a clearAll()+addLastState()
+        // Fire the *previous* slide's deferred clear() now (at this slide's
+        // start) — before this slide's content, so a clear()+addLastState()
         // pair reads as clear-then-re-add across the boundary.
         scene.flushPendingClearAll()
 
         let startTime = scene.timeline.duration
         let startClip = scene.timeline.clips.count
         scene.beginSlideCarry(previous: lastIntroducedOwn)
+        // The transition is the slide's first clip (step 0) — it plays on arrival
+        // and is content-agnostic, so it runs before the slide's own content.
+        transition.enqueue(on: scene)
         content(scene)
         let endClip = scene.timeline.clips.count
         // A slide may be timeline-empty when it only inherits globals and defers a
@@ -115,11 +122,15 @@ public final class Story {
 
         // This slide's *own* new (non-global) entities — excluding what it pulled in
         // via `addLastState` — seed the next slide's `addLastState`, so carry-over is
-        // one step, not transitive.
+        // one step, not transitive. Net-transient entities (a `.fade` transition
+        // overlay, a `.highlight` border introduced *and* removed inside the slide)
+        // are dropped too, so `addLastState` never resurrects them.
         let introduced = introducedEntities(in: startClip..<endClip)
+        let removedInSlide = removedEntities(in: startClip..<endClip)
         let carriedIn = Set(scene.carriedThisSlide.map(ObjectIdentifier.init))
         lastIntroducedOwn = introduced.filter {
-            !globalIDs.contains(ObjectIdentifier($0)) && !carriedIn.contains(ObjectIdentifier($0))
+            let id = ObjectIdentifier($0)
+            return !globalIDs.contains(id) && !carriedIn.contains(id) && !removedInSlide.contains(id)
         }
         accountedClips = scene.timeline.clips.count
 
@@ -151,6 +162,20 @@ public final class Story {
             globalIDs.insert(ObjectIdentifier(entity))
         }
         accountedClips = end
+    }
+
+    /// Entities removed (via any `RemoveEntityTrack`) by the clips in `range` —
+    /// the build-time view of what those clips take off screen. Used to subtract
+    /// net-transient entities from the slide's carry-forward set.
+    private func removedEntities(in range: Range<Int>) -> Set<ObjectIdentifier> {
+        var result = Set<ObjectIdentifier>()
+        for index in range {
+            for track in scene.timeline.clips[index].tracks {
+                guard let remove = track as? RemoveEntityTrack else { continue }
+                result.insert(ObjectIdentifier(remove.removedTarget))
+            }
+        }
+        return result
     }
 
     /// Deduped entities introduced (via any `AddEntitiesTrack`) by the clips in

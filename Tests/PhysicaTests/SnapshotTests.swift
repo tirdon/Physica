@@ -211,7 +211,7 @@ struct SnapshotTests {
     @Test func interactiveDebugLabelsIncludeDisabledHandlers() {
         let scene = Scene()
         let chip = Circle()
-        chip.components[TapHandlerComponent.self] = TapHandlerComponent(isEnabled: false) { _ in }
+        chip.components[TapComponent.self] = TapComponent(isEnabled: false) { _ in }
         scene.add(chip)
         scene.update(deltaTime: 0.016)
 

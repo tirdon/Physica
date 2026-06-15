@@ -90,7 +90,7 @@ import Testing
         let scene = Scene()
         var tapped = false
         let chip = Circle(radius: 0.5)
-        chip.components[TapHandlerComponent.self] = TapHandlerComponent { _ in tapped = true }
+        chip.components[TapComponent.self] = TapComponent { _ in tapped = true }
         scene.add(chip)
         scene.seek(to: 0)
 
@@ -226,8 +226,8 @@ import Testing
         var clicked: Entity?
         let lower = Circle(radius: 0.5)
         let upper = Circle(radius: 0.5)
-        lower.components[DoubleClickComponent.self] = DoubleClickComponent { _ in clicked = lower }
-        upper.components[DoubleClickComponent.self] = DoubleClickComponent { e in clicked = e }
+        lower.components[DoubleTapComponent.self] = DoubleTapComponent { _ in clicked = lower }
+        upper.components[DoubleTapComponent.self] = DoubleTapComponent { e in clicked = e }
         scene.add(lower, upper) // upper on top
         scene.seek(to: 0)
 
@@ -239,7 +239,7 @@ import Testing
         let scene = Scene()
         var fired = false
         let box = Circle(radius: 0.5)
-        box.components[DoubleClickComponent.self] = DoubleClickComponent { _ in fired = true }
+        box.components[DoubleTapComponent.self] = DoubleTapComponent { _ in fired = true }
         scene.add(box)
         scene.seek(to: 0)
 
@@ -251,7 +251,7 @@ import Testing
         let scene = Scene()
         var fired = false
         let box = Circle(radius: 0.5)
-        box.components[DoubleClickComponent.self] = DoubleClickComponent { _ in fired = true }
+        box.components[DoubleTapComponent.self] = DoubleTapComponent { _ in fired = true }
         scene.add(box)
         scene.seek(to: 0)
 
@@ -264,7 +264,7 @@ import Testing
         let scene = Scene()
         let star = Circle(radius: 0.5)
         star.position = Position(1, 0, 0)
-        star.components[DoubleClickComponent.self] = .highlightSelf()
+        star.components[DoubleTapComponent.self] = .highlightSelf()
         scene.add(star)
         scene.seek(to: 0)
 
@@ -326,7 +326,7 @@ import Testing
             payload: .tag("t"), onDragBegan: { _ in dragBegan = true }))
         let chip = Circle(radius: 0.5)
         chip.position = Position(3, 0, 0)
-        chip.components[TapHandlerComponent.self] = TapHandlerComponent { _ in chipTapped = true }
+        chip.components[TapComponent.self] = TapComponent { _ in chipTapped = true }
         scene.add(chip)
         scene.seek(to: 0)
 

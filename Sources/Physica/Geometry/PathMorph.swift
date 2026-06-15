@@ -31,7 +31,7 @@ public enum PathMorph {
         var to: [FlattenedContour] = []
         for (contourA, contourB) in zip(fa, fb) {
             let count = Swift.max(Swift.max(contourA.points.count, contourB.points.count), 32)
-            var resampledA = contourA.resampled(count: count)
+            let resampledA = contourA.resampled(count: count)
             var resampledB = contourB.resampled(count: count)
 
             // Match winding so fills don't invert mid-morph.

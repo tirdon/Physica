@@ -96,6 +96,22 @@ import Testing
         #expect(abs(scene.frame.zoomExtent - 3) < 0.01)
     }
 
+    @Test func frameResetReturnsToDefaultFramingAndScrubsBack() {
+        let scene = Scene()
+        // Push the camera off the default framing, then reset it home.
+        scene.play(scene.frame.shift(Position(0.4, 0.2, 0)), scene.frame.zoom(to: 7.5), for: 1.s)
+        scene.reset(for: 1.s)
+        scene.seek(to: 2)
+        #expect(abs(scene.camera.transform.position.x) < tolerance)
+        #expect(abs(scene.camera.transform.position.y) < tolerance)
+        #expect(abs(scene.camera.transform.position.z - 10) < tolerance)
+        #expect(abs(scene.frame.zoomExtent - 10) < tolerance)
+        // Scrub back to the pushed-in framing: the reset clip is scrub-safe.
+        scene.seek(to: 1)
+        #expect(abs(scene.camera.transform.position.x - 0.4) < tolerance)
+        #expect(abs(scene.frame.zoomExtent - 7.5) < tolerance)
+    }
+
     @Test func saveStateRoundTripsOnFrame() {
         let scene = Scene()
         scene.play(scene.frame.saveState())

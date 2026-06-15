@@ -182,7 +182,7 @@ public final class Scene: Identifiable {
 
     /// Removes specific entities at this point of the timeline (scrub-safe — a
     /// scrub back re-inserts them at their original depth). Story content persists
-    /// by default; `clear`/`clearAll` are how a slide takes things off the board.
+    /// by default; `clear`/`clear` are how a slide takes things off the board.
     @discardableResult
     public func clear(_ entities: Entity...) -> Animation {
         dropEntities(entities)
@@ -193,23 +193,31 @@ public final class Scene: Identifiable {
     /// root except the story globals (entities `scene.add`ed before the slides) is
     /// dropped. Deferred on purpose: the calling slide's content stays visible
     /// through its own duration, and the *last* slide (no next slide) keeps its
-    /// content. Read like `defer { s.clearAll() }` — placement in the slide doesn't
+    /// content. Read like `defer { s.clear() }` — placement in the slide doesn't
     /// matter. What it removes is captured at playback, so it tracks whatever is
     /// actually present; scrubbing back restores it. (No-op outside story mode.)
     @discardableResult
-    public func clearAll() -> Animation {
+    public func clear() -> Animation {
         clearAllPending = true
         return Animation(pairs: [], duration: .zero)
     }
 
+    /// Animates the camera back to the default framing — origin-centered,
+    /// `orthographicFit(extent: 10)` — undoing any ad-hoc `frame.shift`/`zoom`.
+    /// Convenience for `play(frame.reset(), for:)`, so a slide reads `s.reset()`.
+    @discardableResult
+    public func reset(for duration: Duration? = nil, easing: Easing? = nil) -> Animation {
+        play(frame.reset(), for: duration, easing: easing)
+    }
+
     // MARK: Story scaffolding (set/read by `Story.slide`)
 
-    /// The globals `clearAll()` must keep, kept current by `Story` per slide.
+    /// The globals `clear()` must keep, kept current by `Story` per slide.
     var storyGlobalIDs: Set<ObjectIdentifier> = []
-    /// Set by `clearAll()`, fired by `Story` at the next slide's start.
+    /// Set by `clear()`, fired by `Story` at the next slide's start.
     private(set) var clearAllPending = false
 
-    /// Enqueues the deferred `clearAll()` now (called by `Story` when the next
+    /// Enqueues the deferred `clear()` now (called by `Story` when the next
     /// slide begins). Protects whatever globals `Story` last published.
     func flushPendingClearAll() {
         guard clearAllPending else { return }
@@ -231,7 +239,7 @@ public final class Scene: Identifiable {
     }
 
     /// Story mode: re-introduces the entities the *previous* slide newly added, so
-    /// this slide can continue that picture after a `clearAll()`. A no-op on the
+    /// this slide can continue that picture after a `clear()`. A no-op on the
     /// first slide / outside story building. Scrub-safe (re-adds through the normal
     /// add clip); if those entities are still present it does nothing.
     @discardableResult

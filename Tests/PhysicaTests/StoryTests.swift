@@ -186,7 +186,7 @@ import Testing
         story.slide("one") { s in
             s.add(note)
             s.play(note.move(to: Position(1, 0, 0)), for: 1.s)
-            s.clearAll()                                     // deferred — fires at slide two
+            s.clear()                                     // deferred — fires at slide two
         }
         story.slide("two") { s in
             s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
@@ -208,12 +208,12 @@ import Testing
         story.slide("intro") { s in
             s.add(token)
             s.play(token.move(to: Position(1, 0, 0)), for: 1.s)
-            s.clearAll()                                     // deferred — clears `token` entering keep
+            s.clear()                                     // deferred — clears `token` entering keep
         }
         story.slide("keep") { s in
             s.addLastState()                                 // re-pull intro's `token` after the clear
             s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
-            s.clearAll()                                     // deferred — clears it again entering drop
+            s.clear()                                     // deferred — clears it again entering drop
         }
         story.slide("drop") { s in
             s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)   // no addLastState

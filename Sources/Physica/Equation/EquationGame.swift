@@ -187,7 +187,7 @@ public final class EquationGame {
         )
         chip.addChild(border)
         chip.addChild(text)
-        chip.components[TapHandlerComponent.self] = TapHandlerComponent { _ in onTap() }
+        chip.components[TapComponent.self] = TapComponent { _ in onTap() }
         return chip
     }
 

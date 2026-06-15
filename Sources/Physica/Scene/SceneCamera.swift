@@ -70,6 +70,24 @@ public final class SceneCamera: Entity {
         ])
     }
 
+    /// Animate back to the default framing — origin-centered at the default
+    /// camera distance, `orthographicFit(extent: 10)`. The clean inverse of an
+    /// ad-hoc `shift`/`zoom`: it composes like the other camera blueprints, so
+    /// `scene.play(scene.frame.reset(), for: 1.2.s)` is one scrubbable clip
+    /// (the zoom snaps within the current projection kind, like `zoom(to:)`).
+    @discardableResult
+    public func reset() -> Animation {
+        let home = Camera()  // the documented default framing
+        let homeExtent: Real
+        switch home.projection {
+        case .orthographicFit(let v), .orthographic(let v), .perspective(let v): homeExtent = v
+        }
+        return Animation(pairs: [
+            AnimationPair(target: self, blueprint: MoveBlueprint(destination: home.transform.position)),
+            AnimationPair(target: self, blueprint: ZoomBlueprint(factor: homeExtent, isRelative: false)),
+        ])
+    }
+
     /// Unit moves resolve against the camera frame itself — self-referential.
     @available(*, unavailable, message: "scene.frame can't move to a frame edge of itself; use move(to: Position) or focus(on:)")
     public func move(to unit: Unit, padding: Real = 0.5) -> Animation {

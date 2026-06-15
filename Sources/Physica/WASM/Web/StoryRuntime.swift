@@ -5,6 +5,13 @@
 // maps to scrub, arrows run tweens that mirror the scrollbar back. Like
 // WebRuntime it logs the story first (GPU-free smoke relies on that) and treats
 // a missing renderer as non-fatal.
+//
+// Mobile: a horizontal touch swipe over the canvas drives step navigation
+// (swipe left → next step, right → previous), via the core `SwipeRecognizer`.
+// Horizontal only — the canvas keeps `touch-action: pan-y`, so the browser
+// consumes vertical drags as page scroll (the existing scroll-scrub) and a
+// vertical swipe fires `pointercancel`, which simply aborts the recognizer.
+// Swipes are skipped over a draggable token and while an arrow tween runs.
 
 #if os(WASI)
 import JavaScriptKit
@@ -30,6 +37,11 @@ public final class StoryRuntime {
     private var spacerTops: [Double] = []
     private var spacerHeights: [Double] = []
     private var totalPixels: Double = 0
+
+    /// Horizontal-swipe recognizer for touch step navigation, and whether the
+    /// in-flight touch gesture is being tracked as a candidate swipe.
+    private var swipe = SwipeRecognizer()
+    private var swipeTracking = false
 
     private var pendingScrollY: Double?
     /// The last scrollY we wrote via `mirrorScrollFromPlayer`, used to drop the
@@ -77,7 +89,7 @@ public final class StoryRuntime {
             _ = console.log("Physica: scene size", Double(runtime.scene.size.x), "×", Double(runtime.scene.size.y))
 
             runtime.inputBindings = InputBindings(engine: engine, scene: runtime.scene, canvas: runtime.canvas)
-            runtime.installTouchActionFlip()
+            runtime.installTouchGestures()
             runtime.visibilityObserver = VisibilityObserver(engine: engine, canvas: runtime.canvas, sceneID: runtime.scene.id)
             runtime.overlay = DebugOverlay(engine: engine, scene: runtime.scene, hostID: overlayHostID, canvas: runtime.canvas)
             runtime.renderer = renderer
@@ -241,21 +253,60 @@ public final class StoryRuntime {
         }
     }
 
-    /// Over a draggable token, touch must grab (not scroll); elsewhere touch
-    /// should pan the page so the canvas doesn't trap scroll-scrubbing.
-    private func installTouchActionFlip() {
-        let down = JSClosure { [weak self] arguments in
+    /// Touch handling for the pinned canvas: flips `touch-action` (grab a token vs
+    /// pan-scroll the page) and feeds a horizontal-swipe recognizer that drives
+    /// step navigation. Listeners are independent of `InputBindings` (which owns
+    /// drag dispatch) — these only read hit state and steer the player.
+    private func installTouchGestures() {
+        listen("pointerdown") { [weak self] event in self?.touchDown(event) }
+        listen("pointermove") { [weak self] event in self?.touchMove(event) }
+        listen("pointerup") { [weak self] event in self?.touchUp(event) }
+        listen("pointercancel") { [weak self] _ in self?.touchCancel() }
+    }
+
+    private func listen(_ event: String, _ handler: @escaping @MainActor (JSValue) -> Void) {
+        let closure = JSClosure { arguments in
             let event = arguments.first ?? .undefined
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let point = self.worldPoint(event)
-                let grabbing = self.scene.drag.hitTestDraggable(at: point, in: self.scene)
-                _ = self.canvas.setAttribute("style", "touch-action: \(grabbing ? "none" : "pan-y")")
-            }
+            MainActor.assumeIsolated { handler(event) }
             return .undefined
         }
-        closures.append(down)
-        _ = canvas.addEventListener("pointerdown", down)
+        closures.append(closure)
+        _ = canvas.addEventListener(event, closure)
+    }
+
+    private func touchDown(_ event: JSValue) {
+        let point = worldPoint(event)
+        let grabbing = scene.drag.hitTestDraggable(at: point, in: scene)
+        // Over a token → grab (no page scroll); empty canvas → pan-y (scroll-scrub).
+        _ = canvas.setAttribute("style", "touch-action: \(grabbing ? "none" : "pan-y")")
+        // Track a horizontal swipe only when it won't fight a drag or a live tween.
+        swipeTracking = (event.pointerType.string ?? "") == "touch" && !grabbing && !player.isTweening
+        if swipeTracking {
+            // Threshold scales with the visible frame so a swipe reads the same at
+            // any zoom; floored so a tight crop still needs a real flick.
+            swipe.threshold = Swift.max(scene.size.x * 0.15, 0.5)
+            swipe.begin(at: point)
+        }
+    }
+
+    private func touchMove(_ event: JSValue) {
+        guard swipeTracking else { return }
+        swipe.move(to: worldPoint(event))
+    }
+
+    private func touchUp(_ event: JSValue) {
+        guard swipeTracking else { return }
+        swipeTracking = false
+        switch swipe.end() {
+        case .left: player.nextStep()        // swipe left → advance a step
+        case .right: player.previousStep()   // swipe right → go back a step
+        default: break                        // up/down/sub-threshold → leave to scroll/tap
+        }
+    }
+
+    private func touchCancel() {
+        swipeTracking = false
+        swipe.cancel()
     }
 
     private func worldPoint(_ event: JSValue) -> Position {

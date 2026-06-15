@@ -63,7 +63,7 @@ public final class DragCoordinator {
         // Tap handlers (chips) respond even while dragging is disabled;
         // draggables only when the coordinator is enabled.
         let hit = topmostHit(at: pointer, in: scene) { entity in
-            if let tap = entity.components[TapHandlerComponent.self], tap.isEnabled { return true }
+            if let tap = entity.components[TapComponent.self], tap.isEnabled { return true }
             if isEnabled, let drag = entity.components[DraggableComponent.self], drag.isEnabled { return true }
             return false
         }
@@ -230,22 +230,22 @@ public final class DragCoordinator {
     }
 
     private func deliverTap(to entity: Entity) {
-        if let tap = entity.components[TapHandlerComponent.self], tap.isEnabled {
+        if let tap = entity.components[TapComponent.self], tap.isEnabled {
             tap.onTap(entity)
         } else if let draggable = entity.components[DraggableComponent.self], draggable.isEnabled {
             draggable.onTap?(entity)
         }
     }
 
-    /// Fires the topmost `DoubleClickComponent` under the point. Stays live even
+    /// Fires the topmost `DoubleTapComponent` under the point. Stays live even
     /// while `isEnabled == false` (chips/buttons resolve choices) — a discrete
     /// click never disturbs the single-pointer drag state machine.
     private func deliverDoubleClick(at pointer: Position, in scene: Scene) {
         let hit = topmostHit(at: pointer, in: scene) { entity in
-            entity.components[DoubleClickComponent.self]?.isEnabled ?? false
+            entity.components[DoubleTapComponent.self]?.isEnabled ?? false
         }
-        if let hit, let dbl = hit.components[DoubleClickComponent.self], dbl.isEnabled {
-            dbl.onDoubleClick(hit)
+        if let hit, let dbl = hit.components[DoubleTapComponent.self], dbl.isEnabled {
+            dbl.onDoubleTap(hit)
         }
     }
 
