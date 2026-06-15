@@ -69,17 +69,16 @@ import Testing
         #expect(overlay(scene) == nil)
     }
 
-    @Test func fadeOverlayNotCarriedByAddLastState() {
+    @Test func fadeOverlayNotCarriedForward() {
         let scene = Scene()
         let story = Story(scene: scene)
         let token = Circle(radius: 0.2)
         story.slide("one", transition: .fade()) { s in
             s.add(token)
             s.play(token.move(to: Position(1, 0, 0)), for: 1.s)
-            s.clear()
+            s.carry(token)   // carry token; the fade overlay is transient, not carried
         }
         story.slide("two") { s in
-            s.addLastState()
             s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
         }
         let player = StoryPlayer(story: story)

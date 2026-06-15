@@ -18,6 +18,11 @@ public struct Slide: Sendable, Equatable {
     public let startTime: TimeInterval
     public let endTime: TimeInterval
     public let stepBoundaries: [TimeInterval]
+    /// Whether advancing past this slide's end fires an auto-clear of its content.
+    /// The player rests one beat *before* the boundary so the fully-built slide is
+    /// shown before it clears (otherwise seeking to the boundary fast-forwards the
+    /// clear and the last step would render the content already gone).
+    let deferredClear: Bool
 
     public var duration: TimeInterval { endTime - startTime }
     /// Number of rests in this slide (1 = a single instantaneous slide).
@@ -60,14 +65,14 @@ public final class Story {
     public private(set) var slides: [Slide] = []
     private var actions: [StoryAction] = []
 
-    // Story content persists by default (a slide takes things off the board with
-    // `s.clear`/`s.clear`). We track two things for those: the globals
-    // (`scene.add`ed before/between slides) that `clear()` must keep, and each
-    // slide's own new entities so the next slide's `addLastState()` can re-pull
-    // them after a clear.
-    private var globalIDs: Set<ObjectIdentifier> = []
-    private var accountedClips = 0
-    private var lastIntroducedOwn: [Entity] = []
+    // Story content is **slide-scoped by default**: each slide's own-introduced
+    // entities auto-clear when the viewer advances to the next slide. We hold the
+    // *previous* slide's computed clear set here and flush it at the next slide's
+    // start (deferred, so the slide stays visible through its own duration; the
+    // last slide's set is never flushed, so its board persists). Globals
+    // (`scene.add`ed before/between slides) are never in a slide's own set, so
+    // they persist untracked; `s.carry(_:)` opts specific content out of the clear.
+    private var pendingAutoClear: [Entity] = []
 
     /// Invoked by the `StoryPlayer`'s slide-change hook (with from/to indices)
     /// whenever the current slide changes. Use it to reset transient,
@@ -81,58 +86,51 @@ public final class Story {
         self.options = options
     }
 
-    /// Records a slide. Content **persists by default**; a slide clears the board
-    /// itself with `s.clear()` (keeps the globals) or `s.clear(x)` (specific),
-    /// and re-pulls the previous slide's new content with `s.addLastState()` after
-    /// a clear. Globals are anything `scene.add`ed *before* the slides.
+    /// Records a slide. Content is **slide-scoped by default**: the entities this
+    /// slide introduces auto-clear when the viewer advances to the next slide.
+    /// Opt specific content out with `s.carry(x)` (persists onward) or take things
+    /// off mid-slide with `s.clear(x)`. Globals — anything `scene.add`ed *before*
+    /// the slides — persist for the whole story (never in a slide's own set). The
+    /// last slide never auto-clears, so its final board stays.
     ///
     /// Mechanics: snapshots `timeline.duration` / clip count around `content`,
-    /// derives the slide's range and step boundaries, and records the slide's own
-    /// new entities (for the next `addLastState`) and the running global set (for
-    /// `clear`). The content must enqueue at least one clip.
+    /// derives the slide's range and step boundaries, and records its own-introduced
+    /// set (minus `carry`/in-slide removals) as the deferred auto-clear, flushed at
+    /// the next slide's start. The content must enqueue at least one clip.
     @discardableResult
     public func slide(
         _ title: String,
         transition: SlideTransition = .none,
         _ content: (Scene) -> Void
     ) -> Slide {
-        // Anything enqueued since the last slide (globals `scene.add`ed before or
-        // between slides) is recorded as global, so `clear()` keeps it.
-        absorbGlobals()
-        scene.storyGlobalIDs = globalIDs
-        // Fire the *previous* slide's deferred clear() now (at this slide's
-        // start) — before this slide's content, so a clear()+addLastState()
-        // pair reads as clear-then-re-add across the boundary.
-        scene.flushPendingClearAll()
+        // Fire the *previous* slide's auto-clear now, at this slide's start — its
+        // content stayed visible through its own duration and drops as the viewer
+        // crosses into this slide. The last slide's set is never flushed.
+        flushPendingAutoClear()
 
         let startTime = scene.timeline.duration
         let startClip = scene.timeline.clips.count
-        scene.beginSlideCarry(previous: lastIntroducedOwn)
         // The transition is the slide's first clip (step 0) — it plays on arrival
         // and is content-agnostic, so it runs before the slide's own content.
         transition.enqueue(on: scene)
         content(scene)
         let endClip = scene.timeline.clips.count
-        // A slide may be timeline-empty when it only inherits globals and defers a
-        // clearAll (e.g. a degraded no-font slide); that pending clear counts as
-        // intent, so only an inert slide that did nothing at all trips this.
-        precondition(endClip > startClip || scene.clearAllPending,
-                     "Story slide '\(title)' enqueued no clips")
+        // An empty slide is allowed: a zero-duration rest on the globals already on
+        // the board (e.g. a degraded no-font slide that shows only the scaffolding).
         let endTime = scene.timeline.duration
 
-        // This slide's *own* new (non-global) entities — excluding what it pulled in
-        // via `addLastState` — seed the next slide's `addLastState`, so carry-over is
-        // one step, not transitive. Net-transient entities (a `.fade` transition
-        // overlay, a `.highlight` border introduced *and* removed inside the slide)
-        // are dropped too, so `addLastState` never resurrects them.
+        // This slide's auto-clear set: entities it introduced, minus the ones it
+        // `carry`-ed forward and any it already removed within the slide (a `.fade`
+        // overlay or `.highlight` border, introduced *and* removed in one clip).
+        // Globals (added before/between slides) aren't in `introduced`.
         let introduced = introducedEntities(in: startClip..<endClip)
+        let carried = Set(scene.carriedThisSlide.map(ObjectIdentifier.init))
         let removedInSlide = removedEntities(in: startClip..<endClip)
-        let carriedIn = Set(scene.carriedThisSlide.map(ObjectIdentifier.init))
-        lastIntroducedOwn = introduced.filter {
+        pendingAutoClear = introduced.filter {
             let id = ObjectIdentifier($0)
-            return !globalIDs.contains(id) && !carriedIn.contains(id) && !removedInSlide.contains(id)
+            return !carried.contains(id) && !removedInSlide.contains(id)
         }
-        accountedClips = scene.timeline.clips.count
+        scene.resetSlideCarry()
 
         var boundaries: [TimeInterval] = [startTime]
         var cursor = startTime
@@ -147,21 +145,18 @@ public final class Story {
 
         let slide = Slide(
             index: slides.count, title: title,
-            startTime: startTime, endTime: endTime, stepBoundaries: boundaries
+            startTime: startTime, endTime: endTime,
+            stepBoundaries: boundaries, deferredClear: !pendingAutoClear.isEmpty
         )
         slides.append(slide)
         return slide
     }
 
-    /// Records every entity introduced by clips not yet attributed to a slide
-    /// (the `scene.add` calls made before/between slides) as global.
-    private func absorbGlobals() {
-        let end = scene.timeline.clips.count
-        guard accountedClips < end else { return }
-        for entity in introducedEntities(in: accountedClips..<end) {
-            globalIDs.insert(ObjectIdentifier(entity))
-        }
-        accountedClips = end
+    /// Enqueues the previous slide's deferred auto-clear at this slide's start
+    /// (no-op when that slide kept everything). Then this slide's set is computed.
+    private func flushPendingAutoClear() {
+        scene.enqueueSlideClear(pendingAutoClear)
+        pendingAutoClear = []
     }
 
     /// Entities removed (via any `RemoveEntityTrack`) by the clips in `range` —

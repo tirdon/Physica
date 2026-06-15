@@ -293,48 +293,48 @@ final class RemoveEntityTrack: AnimationTrackProtocol {
     }
 }
 
-/// Near-zero-duration track that clears every scene root except a protected set
-/// (the story's globals). What it removes is captured at `begin` (runtime), so
-/// it is accurate at the timeline point it actually plays, and scrubbing back
-/// re-inserts each at its original depth (ascending, so the indices rebuild the
-/// original order). Powers `Scene.clear()`.
+/// Zero-duration track that drops a **fixed** set of entities — a story slide's
+/// own-introduced content (minus what it `carry`-ed or already removed), computed
+/// at build time by `Story.slide`. Each entity's root index is captured at `begin`
+/// (runtime), so scrubbing back re-inserts it at its original depth (ascending, so
+/// the indices rebuild the original order). Powers the automatic end-of-slide
+/// clear; enqueued by `Scene.enqueueSlideClear`.
 ///
-/// The sentinel duration (1e-7) is below the step-boundary collapse threshold
-/// (1e-6), so it introduces no extra step. The `> 0` apply condition means
-/// seeking *to* the clear's start time (landing on the slide boundary) does
-/// not fire the clear — only advancing *past* it (right arrow / scroll) does.
-/// This keeps the previous slide's content visible until the viewer explicitly
-/// moves forward.
+/// Truly zero-duration, so it neither adds a step boundary nor shifts the slide's
+/// start/end times. `apply` always removes (reaching the boundary clears the
+/// previous slide); `rewind` re-inserts (scrubbing back restores it). The
+/// "previous slide stays visible until you move forward" promise is the player's
+/// job — `StoryPlayer` rests one beat *before* a deferred-clear boundary, so the
+/// clear is never reached at that rest.
 @MainActor
-final class ClearAllTrack: AnimationTrackProtocol {
-    /// Sentinel: small enough to collapse into the surrounding step boundary
-    /// (< 1e-6), large enough that `apply(at: duration)` satisfies `> 0`.
-    let duration: TimeInterval = 1e-7
+final class SlideClearTrack: AnimationTrackProtocol {
+    let duration: TimeInterval = 0
     let offset: TimeInterval = 0
-    let label = "clear()"
+    let label: String
 
-    private let protectedIDs: Set<ObjectIdentifier>
+    private let targets: [Entity]
     private var captured = false
     private var removals: [(entity: Entity, index: Int)] = []
 
-    init(protectedIDs: Set<ObjectIdentifier>) {
-        self.protectedIDs = protectedIDs
+    init(removing targets: [Entity]) {
+        self.targets = targets
+        self.label = "autoClear(\(targets.count))"
     }
 
     func begin(in scene: Scene) {
         guard !captured else { return }
         captured = true
-        removals = scene.entities.enumerated()
-            .filter { !protectedIDs.contains(ObjectIdentifier($0.element)) }
-            .map { (entity: $0.element, index: $0.offset) }
+        // Capture only those still on the board, sorted by current root index so
+        // re-insertion (ascending) rebuilds painter's order.
+        removals = targets
+            .compactMap { entity in
+                scene.entities.firstIndex { $0 === entity }.map { (entity: entity, index: $0) }
+            }
+            .sorted { $0.index < $1.index }
     }
 
     func apply(at clipTime: TimeInterval, in scene: Scene) {
-        if clipTime > 0 {
-            for removal in removals { scene.detach(removal.entity) }
-        } else {
-            for removal in removals { scene.insert(removal.entity, at: removal.index) }
-        }
+        for removal in removals { scene.detach(removal.entity) }
     }
 
     func rewind(in scene: Scene) {

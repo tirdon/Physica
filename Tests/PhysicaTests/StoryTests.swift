@@ -5,7 +5,9 @@ import Testing
     private let tolerance: Real = 1e-4
 
     /// A two-slide story: slide 0 = add + two 1s moves (boundaries 0,1,2);
-    /// slide 1 = add + one 2s move (boundaries 2,4). Total 4s.
+    /// slide 1 = add + one 2s move (boundaries 2,4). Total 4s. Slide 0 carries `a`
+    /// so its content persists into slide 1 — a clean boundary (no auto-clear), the
+    /// common "build up across slides" shape.
     private func makeStory() -> (Scene, Story, Circle, Circle) {
         let scene = Scene()
         let story = Story(scene: scene)
@@ -13,6 +15,7 @@ import Testing
         let b = Circle(radius: 0.3)
         story.slide("one") { s in
             s.add(a)
+            s.carry(a)
             s.play(a.move(to: Position(2, 0, 0)), for: 1.s)
             s.play(a.move(to: Position(0, 0, 0)), for: 1.s)
         }
@@ -163,66 +166,67 @@ import Testing
         let b = Circle(radius: 0.2)
         story.slide("one") { s in
             s.add(a, b)
+            s.carry(a, b)                                    // both persist past slide one
             s.play(a.move(to: Position(1, 0, 0)), for: 1.s)
         }
         story.slide("two") { s in
-            s.clear(a)                                       // drop just `a`; `b` persists
+            s.clear(a)                                       // drop just `a`; `b` stays
             s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
         }
         let player = StoryPlayer(story: story)
         player.scrub(slide: 1, progress: 0.5)
-        #expect(!scene.entities.contains { $0 === a })       // cleared
-        #expect(scene.entities.contains { $0 === b })        // persists (default)
+        #expect(!scene.entities.contains { $0 === a })       // explicitly cleared
+        #expect(scene.entities.contains { $0 === b })        // carried, untouched
         player.scrub(slide: 0, progress: 0.5)
         #expect(scene.entities.contains { $0 === a })        // scrub back re-inserts
     }
 
-    @Test func clearAllDefersToNextSlideKeepingGlobals() {
+    @Test func slideContentAutoClearsKeepingGlobals() {
         let scene = Scene()
         let story = Story(scene: scene)
         let bar = Rectangle(width: 1, height: 0.2)   // global (added before slides)
-        let note = Circle(radius: 0.2)               // slide content
+        let note = Circle(radius: 0.2)               // slide content (auto-clears)
         scene.add(bar)
         story.slide("one") { s in
             s.add(note)
             s.play(note.move(to: Position(1, 0, 0)), for: 1.s)
-            s.clear()                                     // deferred — fires at slide two
         }
         story.slide("two") { s in
             s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
         }
         let player = StoryPlayer(story: story)
         player.scrub(slide: 0, progress: 0.5)
-        #expect(scene.entities.contains { $0 === note })     // deferred: still present in slide one
+        #expect(scene.entities.contains { $0 === note })     // visible through slide one
         player.scrub(slide: 1, progress: 0.5)
-        #expect(!scene.entities.contains { $0 === note })    // fires entering slide two
+        #expect(!scene.entities.contains { $0 === note })    // auto-cleared entering slide two
         #expect(scene.entities.contains { $0 === bar })      // global kept
         player.scrub(slide: 0, progress: 0.5)
         #expect(scene.entities.contains { $0 === note })     // scrub back re-inserts
     }
 
-    @Test func addLastStateReaddsPreviousSlideOnlyOneStep() {
+    @Test func carryPersistsContentForwardUntilCleared() {
         let scene = Scene()
         let story = Story(scene: scene)
         let token = Circle(radius: 0.2)
         story.slide("intro") { s in
             s.add(token)
             s.play(token.move(to: Position(1, 0, 0)), for: 1.s)
-            s.clear()                                     // deferred — clears `token` entering keep
+            s.carry(token)                                // opt out of intro's auto-clear
         }
         story.slide("keep") { s in
-            s.addLastState()                                 // re-pull intro's `token` after the clear
-            s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
-            s.clear()                                     // deferred — clears it again entering drop
+            s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)   // token persists, untouched
+            s.clear(token)                                // explicit removal entering drop
         }
         story.slide("drop") { s in
-            s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)   // no addLastState
+            s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
         }
         let player = StoryPlayer(story: story)
         player.scrub(slide: 1, progress: 0.5)
-        #expect(scene.entities.contains { $0 === token })    // re-added one step forward
+        #expect(scene.entities.contains { $0 === token })    // carried into "keep"
         player.scrub(slide: 2, progress: 0.5)
-        #expect(!scene.entities.contains { $0 === token })   // not carried transitively
+        #expect(!scene.entities.contains { $0 === token })   // explicit clear dropped it
+        player.scrub(slide: 0, progress: 0.5)
+        #expect(scene.entities.contains { $0 === token })    // scrub back re-inserts
     }
 
     @Test func subEpsilonScrubIsDeduped() {

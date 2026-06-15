@@ -7,9 +7,9 @@
 //               EquationEntity, draggable x/y projection operators, and a target
 //               box; an EquationGame wins when the x-equation reaches its goal.
 //
-// Content persists by default; each slide ends with `s.clearAll()` (defer-style)
-// which wipes that slide's content when the *next* slide starts, keeping the
-// pendulum globals — so the last slide's board persists. Everything degrades: no
+// Content is slide-scoped: each slide's own entities auto-clear when the *next*
+// slide starts, while the pendulum globals (added before the slides) persist — so
+// the last slide's board stays. No manual clears needed. Everything degrades: no
 // font → no labels; no MathJax → stub/font token glyphs.
 
 #if os(WASI)
@@ -33,8 +33,8 @@ enum EquationStoryDemo {
 
         // The pendulum is global scaffolding: `scene.add`ed *before* the slides so
         // it stays on the board across all of them (Forces draws onto the mass;
-        // Solve keeps it behind the equation). Each slide opens with `s.clearAll()`,
-        // which wipes the previous slide's content but keeps these globals.
+        // Solve keeps it behind the equation). Globals are never in a slide's
+        // own-introduced set, so the per-slide auto-clear leaves them untouched.
         let ceiling = Rectangle(width: 3.4, height: 0.2, color: .gray)
         ceiling.position = Position(0, 2.6, 0)
         let string = Line(start: Position(0, 2.5, 0), end: bob, width: 0.03, color: chalk)
@@ -54,9 +54,8 @@ enum EquationStoryDemo {
                 )
                 s.add(note)
             }
-            // Deferred: the title stays through Setup, and the move into Forces
-            // clears it (the pendulum globals are kept). Last-line, defer-style.
-            s.clear()
+            // No clear needed: the title and callout are Setup's own content, so
+            // they auto-clear as the viewer crosses into Forces; globals stay.
         }
 
         let weight = Arrow(start: bob, end: Position(bob.x, bob.y - 1.6, 0), color: weightColor)
@@ -65,7 +64,7 @@ enum EquationStoryDemo {
             s.play(s.frame.shift(Position(0.4, 0.2, 0)), s.frame.zoom(to: 7.5), for: 1.2.s)
             s.play(.draw(weight), for: 0.6.s)
             s.play(.draw(tension), for: 0.6.s)
-//            s.clear()   // the move into Solve clears these arrows; globals stay
+            // weight & tension are Forces' own content → auto-clear into Solve.
         }
 
         // The tension arrow is the touch target: a tap overlays its x/y
@@ -107,8 +106,8 @@ enum EquationStoryDemo {
 
         var game: EquationGame?
         story.slide("Solve") { s in
-            // Forces' deferred clear() already cleared its arrows as we arrived
-            // here; the pendulum globals stay. Add the equation, operators, and
+            // Forces' arrows auto-cleared as we arrived here; the pendulum globals
+            // stay. Add the equation, operators, and
             // target box at the slide's *start* (before the camera clip) so they're
             // present the instant you arrive: a right-arrow step lands on the
             // slide's first boundary, and adds tucked after the camera clip would
@@ -146,7 +145,7 @@ enum EquationStoryDemo {
             // Camera home: undo the Forces push-in (shift 0.4,0.2 + zoom 7.5) in
             // one call instead of hand-rolling the inverse shift/zoom.
             s.reset(for: 1.2.s)
-            s.clear()   // last slide: never fires, so the equation board persists
+            // Last slide: no auto-clear fires, so the equation board persists.
         }
         return game
     }
