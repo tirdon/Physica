@@ -26,14 +26,14 @@ public struct Transform: Sendable, Equatable, CustomDebugStringConvertible {
     /// Parent ∘ child composition (applies child within parent's space).
     public func concatenating(_ child: Transform) -> Transform {
         Transform(
-            position: position + orientation.act(scale * child.position),
+            position: position + orientation.rotate(scale * child.position),
             orientation: orientation * child.orientation,
             scale: scale * child.scale
         )
     }
 
     public func applying(to point: Position) -> Position {
-        position + orientation.act(scale * point)
+        position + orientation.rotate(scale * point)
     }
 
     public var debugDescription: String {

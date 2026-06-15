@@ -135,8 +135,8 @@ public final class StoryPlayer {
         apply(time: start, force: true)
     }
 
-    /// Instant seek to a slide's start.
-    public func jump(toSlide index: Int) {
+    /// Instant seek to a slide's start (aligns with `scene.seek(to:)`).
+    public func seek(toSlide index: Int) {
         guard story.slides.indices.contains(index) else { return }
         cancelTween()
         apply(time: story.slides[index].startTime, force: true)

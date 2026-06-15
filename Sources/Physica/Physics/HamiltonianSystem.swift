@@ -74,13 +74,13 @@ public final class HamiltonianSystem: System {
         body: PhysicsBodyComponent, motion: PhysicsMotionComponent, orientation: Quaternion
     ) -> Position {
         let inertia = body.shape.inertiaDiagonal(mass: body.mass)
-        let bodyL = orientation.inverse.act(motion.angularMomentum)
+        let bodyL = orientation.inverse.rotate(motion.angularMomentum)
         let bodyOmega = Position(
             inertia.x > 0 ? bodyL.x / inertia.x : 0,
             inertia.y > 0 ? bodyL.y / inertia.y : 0,
             inertia.z > 0 ? bodyL.z / inertia.z : 0
         )
-        return orientation.act(bodyOmega)
+        return orientation.rotate(bodyOmega)
     }
 
     // MARK: Contacts
@@ -127,13 +127,13 @@ public final class HamiltonianSystem: System {
 
             for sample in sampleBody.samples {
                 let world = sampleTransform.applying(to: sample)
-                let local = fieldInverse.act(world - fieldTransform.position)
+                let local = fieldInverse.rotate(world - fieldTransform.position)
                 let distance = fieldBody.shape.distance(at: local)
                 guard distance < 0 else { continue }
                 let penetration = -distance
                 if penetration > (best?.penetration ?? 0) {
                     // Outward gradient of the field body, in world space.
-                    var normal = fieldTransform.orientation.act(fieldBody.shape.gradient(at: local))
+                    var normal = fieldTransform.orientation.rotate(fieldBody.shape.gradient(at: local))
                     if !flipNormal { normal = -normal }  // orient A → B
                     best = Contact(point: world, normal: normal, penetration: penetration)
                 }
@@ -169,13 +169,13 @@ public final class HamiltonianSystem: System {
         ) -> Position {
             guard isDynamic else { return .zero }
             let inertia = body.shape.inertiaDiagonal(mass: body.mass)
-            let local = entity.orientation.inverse.act(vector)
+            let local = entity.orientation.inverse.rotate(vector)
             let scaled = Position(
                 inertia.x > 0 ? local.x / inertia.x : 0,
                 inertia.y > 0 ? local.y / inertia.y : 0,
                 inertia.z > 0 ? local.z / inertia.z : 0
             )
-            return entity.orientation.act(scaled)
+            return entity.orientation.rotate(scaled)
         }
 
         // Velocities at the contact point.

@@ -40,19 +40,19 @@ func approx(_ a: Position, _ b: Position, tolerance: Real = 1e-4) -> Bool {
 
     @Test func quaternionRotation() {
         let quarterTurn = Quaternion(angle: .pi / 2, axis: 1.k)
-        #expect(approx(quarterTurn.act(1.i), 1.j))
-        #expect(approx(Quaternion.identity.act(Position(3, -2, 1)), Position(3, -2, 1)))
+        #expect(approx(quarterTurn.rotate(1.i), 1.j))
+        #expect(approx(Quaternion.identity.rotate(Position(3, -2, 1)), Position(3, -2, 1)))
 
         let composed = quarterTurn * quarterTurn
-        #expect(approx(composed.act(1.i), -1.i))
-        #expect(approx(quarterTurn.inverse.act(1.j), 1.i))
+        #expect(approx(composed.rotate(1.i), -1.i))
+        #expect(approx(quarterTurn.inverse.rotate(1.j), 1.i))
     }
 
     @Test func quaternionSlerp() {
         let halfTurn = Quaternion(angle: .pi, axis: 1.k)
         let mid = Quaternion.slerp(.identity, halfTurn, 0.5)
-        #expect(approx(mid.act(1.i), 1.j))
-        #expect(approx(Quaternion.slerp(.identity, halfTurn, 0).act(1.i), 1.i))
+        #expect(approx(mid.rotate(1.i), 1.j))
+        #expect(approx(Quaternion.slerp(.identity, halfTurn, 0).rotate(1.i), 1.i))
     }
 
     @Test func orthographicProjection() {

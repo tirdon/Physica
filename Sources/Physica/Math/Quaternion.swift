@@ -56,7 +56,7 @@ public struct Quaternion: Sendable, Hashable {
     }
 
     /// Rotates a vector: q v q⁻¹, expanded to the standard two-cross form.
-    public func act(_ v: Position) -> Position {
+    public func rotate(_ v: Position) -> Position {
         let qv = imaginary
         let t = 2 * qv.cross(v)
         return v + w * t + qv.cross(t)

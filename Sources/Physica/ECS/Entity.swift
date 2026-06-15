@@ -87,7 +87,7 @@ open class Entity: Animatable, HasTransform, Identifiable, Hashable {
     /// World point → this entity's local space (updaters crossing spaces use this).
     public func convert(worldPosition: Position) -> Position {
         let world = worldTransform
-        let unrotated = world.orientation.inverse.act(worldPosition - world.position)
+        let unrotated = world.orientation.inverse.rotate(worldPosition - world.position)
         return Position(
             world.scale.x != 0 ? unrotated.x / world.scale.x : 0,
             world.scale.y != 0 ? unrotated.y / world.scale.y : 0,

@@ -94,10 +94,10 @@ public struct Path: Sendable, Equatable {
         return Path(contours: [contour])
     }
 
-    public static func polygon(points: [SIMD2<Real>], closed: Bool = true) -> Path {
+    public static func polygon(points: [SIMD2<Real>], isClosed: Bool = true) -> Path {
         guard let first = points.first else { return Path() }
         let segments = points.dropFirst().map { Segment.line(to: $0) }
-        return Path(contours: [Contour(start: first, segments: Array(segments), isClosed: closed)])
+        return Path(contours: [Contour(start: first, segments: Array(segments), isClosed: isClosed)])
     }
 
     public static func line(from: SIMD2<Real>, to: SIMD2<Real>) -> Path {

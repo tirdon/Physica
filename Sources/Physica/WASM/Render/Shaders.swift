@@ -112,8 +112,8 @@ enum Shaders {
     @fragment
     fn fs_mesh(in: MeshOut) -> @location(0) vec4<f32> {
         let n = normalize(in.normal);
-        let lightDir = normalize(vec3<f32>(0.4, 0.8, 0.6));
-        let lambert = max(dot(n, lightDir), 0.0);
+        let lightDirection = normalize(vec3<f32>(0.4, 0.8, 0.6));
+        let lambert = max(dot(n, lightDirection), 0.0);
         var lit: vec3<f32>;
         if (draw.params.x > 0.5) {
             // Cel: diffuse quantized into flat bands, no fill light.
@@ -121,7 +121,7 @@ enum Shaders {
             let leveled = floor(min(lambert, 0.999) * bands) / (bands - 1.0);
             lit = draw.color.rgb * (0.30 + 0.70 * min(leveled, 1.0));
         } else {
-            let backLight = 0.15 * max(dot(n, -lightDir), 0.0);
+            let backLight = 0.15 * max(dot(n, -lightDirection), 0.0);
             lit = draw.color.rgb * (0.25 + 0.75 * lambert + backLight);
         }
         return vec4<f32>(lit * draw.color.a, draw.color.a);
