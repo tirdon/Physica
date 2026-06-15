@@ -102,7 +102,7 @@ public final class DragCoordinator {
             break
         case .pressed(let source, let start):
             phase = .idle
-            if !movedPastSlop(from: start, to: pointer) { deliverTap(to: source) }
+            if !movedPastSlop(from: start, to: pointer) { deliverTap(to: source, in: scene) }
         case .dragging(var active):
             phase = .idle
             clearHover(&active)
@@ -229,9 +229,19 @@ public final class DragCoordinator {
         )
     }
 
-    private func deliverTap(to entity: Entity) {
+    /// Runs `body` with the runner's handler-owner set to `owner`, so any
+    /// interaction the handler starts defaults to being owned by `owner` (no
+    /// explicit `owner:` at the call site). Saves/restores so nesting is safe.
+    private func withHandlerOwner(_ owner: Entity, in scene: Scene, _ body: () -> Void) {
+        let previous = scene.interactions.handlerOwner
+        scene.interactions.handlerOwner = owner
+        defer { scene.interactions.handlerOwner = previous }
+        body()
+    }
+
+    private func deliverTap(to entity: Entity, in scene: Scene) {
         if let tap = entity.components[TapComponent.self], tap.isEnabled {
-            tap.onTap(entity)
+            withHandlerOwner(entity, in: scene) { tap.onTap(scene, entity) }
         } else if let draggable = entity.components[DraggableComponent.self], draggable.isEnabled {
             draggable.onTap?(entity)
         }
@@ -245,7 +255,7 @@ public final class DragCoordinator {
             entity.components[DoubleTapComponent.self]?.isEnabled ?? false
         }
         if let hit, let dbl = hit.components[DoubleTapComponent.self], dbl.isEnabled {
-            dbl.onDoubleTap(hit)
+            withHandlerOwner(hit, in: scene) { dbl.onDoubleTap(scene, hit) }
         }
     }
 

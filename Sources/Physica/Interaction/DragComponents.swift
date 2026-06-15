@@ -100,11 +100,19 @@ public struct DropTargetComponent: Component {
 /// so the user can still resolve a choice with `drag.isEnabled == false`.
 public struct TapComponent: Component {
     public var isEnabled: Bool
-    public var onTap: @MainActor (Entity) -> Void
+    public var onTap: @MainActor (Scene, Entity) -> Void
 
-    public init(isEnabled: Bool = true, onTap: @escaping @MainActor (Entity) -> Void) {
+    /// Scene-carrying handler: the tapped entity plus the scene it lives in, so
+    /// the closure needs no captured scene reference.
+    public init(isEnabled: Bool = true, onTap: @escaping @MainActor (Scene, Entity) -> Void) {
         self.isEnabled = isEnabled
         self.onTap = onTap
+    }
+
+    /// Entity-only convenience (chips, tests) — wraps into the scene form.
+    public init(isEnabled: Bool = true, onTap: @escaping @MainActor (Entity) -> Void) {
+        self.isEnabled = isEnabled
+        self.onTap = { _, entity in onTap(entity) }
     }
 
     public var debugString: String { "Tap\(isEnabled ? "" : "(disabled)")" }
@@ -133,16 +141,23 @@ public struct HoverComponent: Component {
 /// `dblclick`; host tests dispatch `.doubleClick` directly. Like a tap handler it
 /// stays live regardless of `drag.isEnabled`, and a single click's `onTap` (if
 /// the entity also has one) still fires first — wire both only when you want
-/// both. The handler gets the entity, so the common "double-click me to
-/// highlight myself" reads as `entity.scene?.interact(.highlight(entity))` —
-/// see `.highlightSelf()`.
+/// both. The handler gets the scene and the entity, so the common "double-click
+/// me to highlight myself" reads as `scene.interact(.highlight(entity))` — see
+/// `.highlightSelf()`.
 public struct DoubleTapComponent: Component {
     public var isEnabled: Bool
-    public var onDoubleTap: @MainActor (Entity) -> Void
+    public var onDoubleTap: @MainActor (Scene, Entity) -> Void
 
-    public init(isEnabled: Bool = true, onDoubleTap: @escaping @MainActor (Entity) -> Void) {
+    /// Scene-carrying handler.
+    public init(isEnabled: Bool = true, onDoubleTap: @escaping @MainActor (Scene, Entity) -> Void) {
         self.isEnabled = isEnabled
         self.onDoubleTap = onDoubleTap
+    }
+
+    /// Entity-only convenience — wraps into the scene form.
+    public init(isEnabled: Bool = true, onDoubleTap: @escaping @MainActor (Entity) -> Void) {
+        self.isEnabled = isEnabled
+        self.onDoubleTap = { _, entity in onDoubleTap(entity) }
     }
 
     public var debugString: String { "DoubleTap\(isEnabled ? "" : "(disabled)")" }
@@ -159,8 +174,8 @@ public extension DoubleTapComponent {
         color: Color = Color(hex: 0x53F0FF),
         padding: Real = 0.3
     ) -> DoubleTapComponent {
-        DoubleTapComponent { entity in
-            entity.scene?.interact(.highlight(entity, color: color, padding: padding))
+        DoubleTapComponent { scene, entity in
+            scene.interact(.highlight(entity, color: color, padding: padding))
         }
     }
 }

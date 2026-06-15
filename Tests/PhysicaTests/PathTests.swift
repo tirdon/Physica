@@ -80,7 +80,16 @@ struct PathTests {
     @Test func arrowGeometry() {
         let arrow = Arrow(start: .origin, end: Position(2, 0, 0))
         #expect(arrow.path.contours.count == 2)           // shaft + head
+        #expect(arrow.style.cap == .round)                // soft tip by default
         let bounds = arrow.localBounds
         #expect(approx(bounds.max.x, 2, tolerance: 1e-3))
+    }
+
+    @Test func doubleHeadedArrowGeometry() {
+        let arrow = Arrow(start: .origin, end: Position(2, 0, 0), doubleHeaded: true)
+        #expect(arrow.path.contours.count == 3)           // shaft + a head each end
+        let bounds = arrow.localBounds
+        #expect(approx(bounds.min.x, 0, tolerance: 1e-3))
+        #expect(approx(bounds.max.x, 2, tolerance: 1e-3))  // tips still reach both ends
     }
 }

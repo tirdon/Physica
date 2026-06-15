@@ -10,11 +10,14 @@
 // hook (interruptAll + drag cancel) so nothing strands mid-air.
 //
 // Navigation rides ONE precomputed list of `Beat`s (time + slide + step), built
-// once from the story's slides. Steps move ±1 beat; slides jump between step-0
-// beats. Identity is the beat, not a float comparison, so there is a single
-// epsilon (scroll-scrub dedup) and no boundary-equality dance. The only nudge:
+// once from the story's slides. Steps move ±1 beat; slides jump between rests.
+// Identity is the beat, not a float comparison, so there is a single epsilon
+// (scroll-scrub dedup) and no boundary-equality dance. Two beats are dropped:
 // a slide that auto-clears its content gets a rest one `boundaryNudge` *before*
-// its end, so the fully-built slide shows before the clear fires at the boundary.
+// its end (so the fully-built slide shows before the clear fires at the
+// boundary), and a content-entrance (`.push`) slide drops its step 0 (the
+// off-board pre-slide-in state) so the slide-in plays during the arrival tween
+// and the first rest is the landed slide.
 
 public struct StoryState: Sendable, Equatable {
     public var slideIndex: Int
@@ -28,6 +31,8 @@ public enum StoryEvent: Sendable, Equatable {
     case slideChanged(from: Int, to: Int)
     case boundaryReached(slide: Int, step: Int)
     case actionTriggered(id: String)
+    /// Autoplay reached the last beat and stopped (not emitted when looping).
+    case autoplayFinished
 }
 
 @MainActor
@@ -46,9 +51,28 @@ public final class StoryPlayer {
     }
     private let beats: [Beat]
 
+    /// The "fully-built end" rest time of each slide, in order — where `nextSlide`
+    /// (Down) comes to rest. A slide rests one `boundaryNudge` before its end when
+    /// it auto-clears (its content still shown, about to clear) or its successor is
+    /// a content entrance (whose slide-in begins exactly at the boundary); every
+    /// other slide — plain clean-boundary or the last — rests at its true end.
+    /// These coincide with the beats `nextStep` (Right) already stops on, so Down
+    /// lands on the same fully-built ends Right does, just skipping the in-between
+    /// steps — never on a bare next-slide start where the prior content has cleared.
+    private let slideEndRestTimes: [TimeInterval]
+
     private struct Tween { let target: Beat; let forward: Bool }
     private var tween: Tween?
     private var lastSeekedTime: TimeInterval = -1
+
+    /// Autoplay: when on, `tick` rests on each beat for `options.autoplayDwell`
+    /// wall-seconds (counted down in `dwellRemaining`) then advances one beat,
+    /// whose tween plays the step. Looping or stopping at the last beat is
+    /// `options.autoplayLoops`. Manual nav/scroll do *not* toggle this — the shell
+    /// pauses on user input if it wants; the dwell simply counts from wherever the
+    /// playhead lands.
+    public private(set) var isAutoplaying = false
+    private var dwellRemaining: TimeInterval = 0
 
     /// Sole epsilon: scroll-scrub dedup and "strictly past the current beat" in
     /// nav searches, and the tween's reached-target test (the landing then snaps
@@ -62,6 +86,7 @@ public final class StoryPlayer {
     public init(story: Story) {
         self.story = story
         self.beats = Self.buildBeats(from: story.slides)
+        self.slideEndRestTimes = Self.buildSlideEndRestTimes(from: story.slides)
         scene.seek(to: 0)  // also pauses the timeline — story mode never resumes
         lastSeekedTime = 0
         currentSlideIndex = beats.first?.slide ?? 0
@@ -78,20 +103,46 @@ public final class StoryPlayer {
         for slide in slides {
             let steps = slide.stepBoundaries
             let isLastSlide = slide.index == slides.count - 1
+            let nextIsEntrance = !isLastSlide && slides[slide.index + 1].entranceTransition
             for step in steps.indices {
                 let isFinalStep = step == steps.count - 1
+                // A content-entrance slide's step 0 is the off-board "pre-slide-in"
+                // state — never a rest. The slide-in plays during the arrival tween
+                // and the first rest is the landed step 1.
+                if slide.entranceTransition && step == 0 { continue }
                 if isFinalStep && !isLastSlide {
-                    // Shared with the next slide's start.
-                    if slide.deferredClear {
+                    // Shared with the next slide's start. Rest one nudge before it
+                    // when this slide auto-clears (show it built before the clear
+                    // fires) OR the next slide is an entrance (its slide-in begins
+                    // exactly here with its content off-board, so this slide's built
+                    // end and that off-board t=0 are the same instant — back off so
+                    // *this* slide is the rest). A clean boundary into a normal slide
+                    // is owned by that slide's step-0 beat instead.
+                    if slide.deferredClear || nextIsEntrance {
                         beats.append(Beat(time: steps[step] - boundaryNudge, slide: slide.index, step: step))
                     }
-                    // else: clean boundary — the next slide's step-0 beat owns this time.
                 } else {
                     beats.append(Beat(time: steps[step], slide: slide.index, step: step))
                 }
             }
         }
         return beats
+    }
+
+    /// Fully-built end rest time per slide (see `slideEndRestTimes`). Mirrors
+    /// `buildBeats`: a non-last deferred-clear slide rests `boundaryNudge` before
+    /// its end; the last slide keeps its true end even if it auto-built content.
+    private static func buildSlideEndRestTimes(from slides: [Slide]) -> [TimeInterval] {
+        let lastIndex = slides.count - 1
+        return slides.map { slide in
+            // Mirror `buildBeats`: rest one nudge before the end for a non-last
+            // slide that auto-clears, or whose successor is a content entrance
+            // (whose slide-in begins exactly at this boundary). Keep the rest and
+            // the beat at the same time, else Down re-targets a beat it is already on.
+            let nextIsEntrance = slide.index < lastIndex && slides[slide.index + 1].entranceTransition
+            let restsBeforeEnd = (slide.deferredClear || nextIsEntrance) && slide.index != lastIndex
+            return slide.endTime - (restsBeforeEnd ? boundaryNudge : 0)
+        }
     }
 
     // MARK: Step navigation (Left / Right)
@@ -114,15 +165,16 @@ public final class StoryPlayer {
 
     // MARK: Slide navigation (Up / Down)
 
-    /// Tween forward to the next slide's start (its step-0 beat); on the last
-    /// slide, tween to the final beat.
+    /// Tween forward to the next slide's *fully-built end* rest — the same rest
+    /// Right-stepping settles on for a slide's last step, so Down shows the slide
+    /// complete (a deferred-clear slide one nudge before it clears) rather than
+    /// landing on a bare next-slide start where the prior content has vanished.
     public func nextSlide() {
         let now = scene.timeline.currentTime
-        if let next = beats.first(where: { $0.step == 0 && $0.time > now + Self.seekEpsilon }) {
-            beginTween(to: next)
-        } else if let last = beats.last, last.time > now + Self.seekEpsilon {
-            beginTween(to: last)
-        }
+        guard let target = slideEndRestTimes.first(where: { $0 > now + Self.seekEpsilon }),
+              let beat = beats.last(where: { $0.time <= target + Self.seekEpsilon })
+        else { return }
+        beginTween(to: beat)
     }
 
     /// Instant seek back to the start of the slide before the current one.
@@ -130,16 +182,20 @@ public final class StoryPlayer {
         let target = Swift.max(0, currentSlideIndex - 1)
         guard story.slides.indices.contains(target) else { return }
         cancelTween()
-        let start = beats.first { $0.slide == target && $0.step == 0 }?.time
+        // First *restable* beat of the target — its landed state for a content-
+        // entrance slide (step 0, the off-board pre-slide-in, is never a rest).
+        let start = beats.first { $0.slide == target }?.time
             ?? story.slides[target].startTime
         apply(time: start, force: true)
     }
 
-    /// Instant seek to a slide's start (aligns with `scene.seek(to:)`).
+    /// Instant seek to a slide's first rest (its start for a normal slide, its
+    /// landed state for a content-entrance slide).
     public func seek(toSlide index: Int) {
         guard story.slides.indices.contains(index) else { return }
         cancelTween()
-        apply(time: story.slides[index].startTime, force: true)
+        let time = beats.first { $0.slide == index }?.time ?? story.slides[index].startTime
+        apply(time: time, force: true)
     }
 
     // MARK: Scrubbing (scroll)
@@ -168,12 +224,39 @@ public final class StoryPlayer {
         emit(.actionTriggered(id: actionID))
     }
 
-    // MARK: Per-frame tween advance
+    // MARK: Autoplay (timed playback over the beat list)
 
-    /// Advances an in-flight arrow tween. No-op when nothing is tweening, so the
-    /// web RAF loop can call it unconditionally.
+    /// Start timed playback: dwell on the current beat, then auto-advance. No-op if
+    /// already playing.
+    public func play() {
+        guard !isAutoplaying else { return }
+        isAutoplaying = true
+        dwellRemaining = story.options.autoplayDwell
+    }
+
+    /// Stop timed playback. The playhead stays where it is.
+    public func pause() { isAutoplaying = false }
+
+    public func toggleAutoplay() { isAutoplaying ? pause() : play() }
+
+    // MARK: Per-frame advance (tween + autoplay)
+
+    /// Advances an in-flight arrow tween, or — when autoplaying and at rest — the
+    /// dwell countdown that triggers the next auto-advance. No-op when neither is
+    /// active, so the web RAF loop can call it unconditionally every frame.
     public func tick(deltaTime: TimeInterval) {
-        guard let tween, deltaTime > 0 else { return }
+        guard deltaTime > 0 else { return }
+        if tween != nil {
+            advanceTween(deltaTime: deltaTime)
+            return
+        }
+        guard isAutoplaying else { return }
+        dwellRemaining -= deltaTime
+        if dwellRemaining <= 0 { advanceAutoplay() }
+    }
+
+    private func advanceTween(deltaTime: TimeInterval) {
+        guard let tween else { return }
         let now = scene.timeline.currentTime
         let stepAmount = TimeInterval(story.options.stepTweenSpeed) * deltaTime
         let next = tween.forward
@@ -185,10 +268,31 @@ public final class StoryPlayer {
             let landed = tween.target
             self.tween = nil
             emit(.boundaryReached(slide: landed.slide, step: landed.step))
+            if isAutoplaying { dwellRemaining = story.options.autoplayDwell }
+        }
+    }
+
+    /// Dwell elapsed: advance one beat (its tween then plays the step). At the last
+    /// beat, loop to the first or stop, per `options.autoplayLoops`.
+    private func advanceAutoplay() {
+        let now = scene.timeline.currentTime
+        if beats.contains(where: { $0.time > now + Self.seekEpsilon }) {
+            dwellRemaining = story.options.autoplayDwell
+            nextStep()
+        } else if story.options.autoplayLoops, let first = beats.first {
+            dwellRemaining = story.options.autoplayDwell
+            apply(time: first.time, force: true)
+        } else {
+            isAutoplaying = false
+            emit(.autoplayFinished)
         }
     }
 
     public var isTweening: Bool { tween != nil }
+
+    /// The narration caption active at the current playhead time (`""` if none).
+    /// The web shell renders this in its caption band each frame.
+    public var currentCaption: String { story.caption(at: scene.timeline.currentTime) }
 
     public var state: StoryState {
         let time = scene.timeline.currentTime

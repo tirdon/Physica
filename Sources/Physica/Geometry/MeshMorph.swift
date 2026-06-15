@@ -31,7 +31,7 @@ public enum MeshMorph {
     }
 
     /// Samples the surface along a spherical grid of directions from the centroid.
-    static func resampleByDirection(_ mesh: Mesh, segments: Int, rings: Int) -> Mesh {
+    static func resampleByDirection(_ mesh: borrowing Mesh, segments: Int, rings: Int) -> Mesh {
         let center = mesh.bounds.center
         var positions: [Position] = []
         positions.reserveCapacity((rings + 1) * (segments + 1))
@@ -79,7 +79,7 @@ public enum MeshMorph {
     }
 
     /// Farthest ray-triangle hit (Möller–Trumbore), so the outer surface wins.
-    static func farthestHit(mesh: Mesh, origin: Position, direction: Position) -> Real? {
+    static func farthestHit(mesh: borrowing Mesh, origin: Position, direction: Position) -> Real? {
         var best: Real?
         var index = 0
         while index + 2 < mesh.indices.count {

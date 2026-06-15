@@ -28,10 +28,20 @@ public final class InteractionRunner {
         let clip: AnimationClip
         let policy: InterruptionPolicy
         var time: TimeInterval
+        let owner: Entity?
         let completion: (@MainActor () -> Void)?
     }
 
     private var active: [Active] = []
+    /// Entities each owner's interaction introduced, retained past the clip's own
+    /// lifetime so `interrupt(ownedBy:)` can still clear a reveal that already
+    /// finished drawing and is just persisting. Keyed by `owner.id`.
+    private var introducedByOwner: [UInt64: [Entity]] = [:]
+    /// The entity whose tap/double-tap handler is currently running. The drag
+    /// coordinator sets it around a handler call so interactions started inside
+    /// the handler default to that owner — callers write `scene.interact(.draw(x))`
+    /// / `scene.interrupt()` with no explicit owner.
+    var handlerOwner: Entity?
     private var nextHandleID: UInt64 = 1
 
     public var isIdle: Bool { active.isEmpty }
@@ -44,10 +54,17 @@ public final class InteractionRunner {
         clip: AnimationClip,
         policy: InterruptionPolicy,
         in scene: Scene,
+        owner: Entity? = nil,
+        introduced: [Entity] = [],
         completion: (@MainActor () -> Void)? = nil
     ) -> Handle {
         let handle = Handle(id: nextHandleID)
         nextHandleID += 1
+        // Record before the zero-duration early-out so even an instant reveal is
+        // dismissible by its owner.
+        if let owner, !introduced.isEmpty {
+            introducedByOwner[owner.id, default: []].append(contentsOf: introduced)
+        }
         clip.begin(in: scene)
         if clip.duration <= 0 {
             clip.apply(at: 0, in: scene)
@@ -55,7 +72,7 @@ public final class InteractionRunner {
             return handle
         }
         clip.apply(at: 0, in: scene)
-        active.append(Active(handle: handle, clip: clip, policy: policy, time: 0, completion: completion))
+        active.append(Active(handle: handle, clip: clip, policy: policy, time: 0, owner: owner, completion: completion))
         return handle
     }
 
@@ -85,14 +102,39 @@ public final class InteractionRunner {
         finish(entry, in: scene)
     }
 
+    /// Dismiss a reveal owned by `owner`: drop any clip it started (so a live
+    /// `.draw` stops re-inserting its target every advance) and remove every
+    /// entity that interaction introduced — whether still mid-flight or already
+    /// finished and persisting. The owner-keyed counterpart to `interrupt(_:in:)`.
+    /// Order matters: clear the active clip before detaching, or the next advance
+    /// would re-insert what we just removed.
+    public func interrupt(ownedBy owner: Entity, in scene: Scene) {
+        active.removeAll { $0.owner === owner }
+        for entity in introducedByOwner[owner.id] ?? [] {
+            scene.detach(entity)
+        }
+        introducedByOwner[owner.id] = nil
+    }
+
+    /// Whether `owner` has a live reveal (introduced entities still on the board).
+    /// Lets a re-tap skip restacking without any captured state.
+    public func isOwned(by owner: Entity) -> Bool {
+        !(introducedByOwner[owner.id]?.isEmpty ?? true)
+    }
+
     /// Resolve everything in flight — the story player calls this on slide
-    /// changes so no token strands mid-air.
+    /// changes so no token strands mid-air. Owner-tagged reveals are cleared too,
+    /// so a tapped-open overlay never leaks into the next slide.
     public func interruptAll(in scene: Scene) {
         let entries = active
         active.removeAll()
         for entry in entries {
             finish(entry, in: scene)
         }
+        for entities in introducedByOwner.values {
+            for entity in entities { scene.detach(entity) }
+        }
+        introducedByOwner.removeAll()
     }
 
     private func finish(_ entry: Active, in scene: Scene) {

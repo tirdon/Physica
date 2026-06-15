@@ -37,7 +37,7 @@ struct FramePacket {
 }
 
 enum GeometryUploader {
-    static func pack(_ snapshot: SceneSnapshot) -> FramePacket {
+    static func pack(_ snapshot: borrowing SceneSnapshot) -> FramePacket {
         var packet = FramePacket()
 
         // Blackboard backdrop first: a fullscreen flat quad (depth off) that
@@ -122,7 +122,7 @@ enum GeometryUploader {
 
     // MARK: Meshes
 
-    private static func appendMesh(_ mesh: MeshDraw, into packet: inout FramePacket) {
+    private static func appendMesh(_ mesh: borrowing MeshDraw, into packet: inout FramePacket) {
         var shadingParams: [Float32] = [0, 0, 0, 0]
         var outline: Real = 0
         if case .toon(let bands, let outlineWidth) = mesh.shading {
@@ -134,6 +134,7 @@ enum GeometryUploader {
             model: mesh.model, color: opaqueColor, params: shadingParams, into: &packet
         )
         let baseVertex = packet.meshVertices.count / 6
+        packet.meshVertices.reserveCapacity(packet.meshVertices.count + mesh.positions.count * 6)
         for index in 0..<mesh.positions.count {
             let p = mesh.positions[index]
             let n = index < mesh.normals.count ? mesh.normals[index] : Position(0, 0, 1)
@@ -173,7 +174,7 @@ enum GeometryUploader {
 
     // MARK: Paths
 
-    private static func appendPath(_ path: PathPrimitive, into packet: inout FramePacket) {
+    private static func appendPath(_ path: borrowing PathPrimitive, into packet: inout FramePacket) {
         if let fill = path.style.fill {
             let color = fill.with(opacity: Float(path.fillOpacityFactor))
             if color.a > 0.001 {
@@ -185,7 +186,7 @@ enum GeometryUploader {
         }
     }
 
-    private static func appendFill(_ path: PathPrimitive, color: Color, into packet: inout FramePacket) {
+    private static func appendFill(_ path: borrowing PathPrimitive, color: Color, into packet: inout FramePacket) {
         let slot = appendUniformSlot(
             model: .identity, color: color, params: params(for: path.style), into: &packet
         )
@@ -240,7 +241,7 @@ enum GeometryUploader {
         ))
     }
 
-    private static func appendStroke(_ path: PathPrimitive, color: Color, into packet: inout FramePacket) {
+    private static func appendStroke(_ path: borrowing PathPrimitive, color: Color, into packet: inout FramePacket) {
         let halfWidth = max(path.style.strokeWidth, 0.001) / 2
 
         // Count segments across all contours so the trim window maps globally

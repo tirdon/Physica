@@ -8,9 +8,9 @@ import Testing
     /// slide 1 = add + one 2s move (boundaries 2,4). Total 4s. Slide 0 carries `a`
     /// so its content persists into slide 1 — a clean boundary (no auto-clear), the
     /// common "build up across slides" shape.
-    private func makeStory() -> (Scene, Story, Circle, Circle) {
+    private func makeStory(options: StoryOptions = StoryOptions()) -> (Scene, Story, Circle, Circle) {
         let scene = Scene()
-        let story = Story(scene: scene)
+        let story = Story(scene: scene, options: options)
         let a = Circle(radius: 0.3)
         let b = Circle(radius: 0.3)
         story.slide("one") { s in
@@ -30,6 +30,14 @@ import Testing
         var ticks = 0
         while player.isTweening && ticks < maxTicks {
             player.tick(deltaTime: 0.1)
+            ticks += 1
+        }
+    }
+
+    private func runAutoplay(_ player: StoryPlayer, maxTicks: Int = 5000) {
+        var ticks = 0
+        while player.isAutoplaying && ticks < maxTicks {
+            player.tick(deltaTime: 0.05)
             ticks += 1
         }
     }
@@ -135,7 +143,38 @@ import Testing
         #expect(player.isTweening)
         runTweens(player)
         #expect(player.currentSlideIndex == 1)
-        #expect(abs(scene.timeline.currentTime - 2) < tolerance) // lands at slide 1's start
+        // Clean carry-boundary: slide 0's fully-built end coincides with slide 1's
+        // start (its content carried), so Down rests at t = 2 either way.
+        #expect(abs(scene.timeline.currentTime - 2) < tolerance)
+    }
+
+    /// Down on a *deferred-clear* slide rests at its fully-built end (one nudge
+    /// before its content clears at the boundary), not the bare next-slide start.
+    /// That is the rest Right-stepping settles on too — regression for "Down lands
+    /// on the start of the new slide instead of the end of the slide".
+    @Test func nextSlideRestsAtDeferredClearEnd() {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        let a = Circle(radius: 0.3)
+        let b = Circle(radius: 0.3)
+        story.slide("one") { s in
+            s.add(a)                                        // own content, not carried → auto-clears
+            s.play(a.move(to: Position(2, 0, 0)), for: 1.s)
+        }
+        story.slide("two") { s in
+            s.add(b)
+            s.play(b.move(to: Position(0, 3, 0)), for: 1.s)
+        }
+        #expect(story.slides[0].deferredClear)              // `a` clears into slide 1
+        let player = StoryPlayer(story: story)
+        player.nextSlide()
+        runTweens(player)
+        // Rests just *before* the slide-0/1 boundary at t = 1, still on slide 0 with
+        // `a` shown — not at t = 1 where slide 1 starts and `a` has cleared.
+        #expect(player.currentSlideIndex == 0)
+        #expect(scene.timeline.currentTime < 1)
+        #expect(abs(scene.timeline.currentTime - 1) < 0.01)
+        #expect(scene.entities.contains { $0 === a })
     }
 
     @Test func previousSlideIsInstant() {
@@ -323,5 +362,317 @@ import Testing
         // Smoothstep(0.5) = 0.5, so the camera sits halfway along the shift.
         #expect(abs(scene.camera.transform.position.x - 3) < 0.2)
         #expect(abs(scene.camera.transform.position.z - 10) < tolerance) // shift keeps z
+    }
+
+    // MARK: Autoplay
+
+    @Test func autoplayDwellsBeforeFirstAdvance() {
+        let (scene, story, _, _) = makeStory(options: StoryOptions(autoplayDwell: 1.0))
+        let player = StoryPlayer(story: story)
+        player.play()
+        #expect(player.isAutoplaying)
+        player.tick(deltaTime: 0.5)              // half the dwell — still resting at t = 0
+        #expect(!player.isTweening)
+        #expect(abs(scene.timeline.currentTime - 0) < tolerance)
+        player.tick(deltaTime: 0.6)              // dwell elapsed → begins advancing
+        #expect(player.isTweening)
+    }
+
+    @Test func autoplayAdvancesThroughAllBeatsThenStops() {
+        let (scene, story, _, _) = makeStory(options: StoryOptions(autoplayDwell: 0.2))
+        let player = StoryPlayer(story: story)
+        player.play()
+        runAutoplay(player)
+        #expect(!player.isAutoplaying)                          // stopped at the last beat (no loop)
+        #expect(abs(scene.timeline.currentTime - 4) < tolerance) // beats end at t = 4
+        #expect(player.currentSlideIndex == 1)
+    }
+
+    @Test func pausePreventsAutoplayAdvance() {
+        let (scene, story, _, _) = makeStory(options: StoryOptions(autoplayDwell: 0.2))
+        let player = StoryPlayer(story: story)
+        player.play()
+        player.pause()
+        #expect(!player.isAutoplaying)
+        for _ in 0..<100 { player.tick(deltaTime: 0.1) }        // long after the dwell would elapse
+        #expect(!player.isTweening)
+        #expect(abs(scene.timeline.currentTime - 0) < tolerance) // never advanced
+    }
+
+    @Test func autoplayFinishedEventFiresAtEnd() async {
+        let (_, story, _, _) = makeStory(options: StoryOptions(autoplayDwell: 0.1))
+        let player = StoryPlayer(story: story)
+        let stream = player.eventStream()
+        player.play()
+        runAutoplay(player)
+        var sawFinished = false
+        for await event in stream {
+            if event == .autoplayFinished { sawFinished = true; break }
+        }
+        #expect(sawFinished)
+    }
+
+    @Test func autoplayLoopsBackToStart() {
+        let (scene, story, _, _) = makeStory(options: StoryOptions(autoplayDwell: 0.2, autoplayLoops: true))
+        let player = StoryPlayer(story: story)
+        player.play()
+        var reachedEnd = false
+        var wrapped = false
+        for _ in 0..<3000 {
+            player.tick(deltaTime: 0.05)
+            if abs(scene.timeline.currentTime - 4) < 0.05 { reachedEnd = true }
+            if reachedEnd && scene.timeline.currentTime < 1 { wrapped = true }
+        }
+        #expect(player.isAutoplaying)   // looping never stops on its own
+        #expect(wrapped)                // ran to the end, then restarted from the top
+    }
+
+    // MARK: Narration captions
+
+    @Test func captionsActivateByTimeRange() {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        let a = Circle(radius: 0.2)
+        let b = Circle(radius: 0.2)
+        story.slide("one") { s in
+            story.caption("first beat")                       // recorded at t = 0
+            s.add(a)
+            s.play(a.move(to: Position(1, 0, 0)), for: 1.s)
+            story.caption("second beat")                      // recorded at t = 1
+            s.play(a.move(to: Position(2, 0, 0)), for: 1.s)
+        }
+        story.slide("two") { s in
+            story.caption("third beat")                       // recorded at t = 2
+            s.add(b)
+            s.play(b.move(to: Position(0, 1, 0)), for: 1.s)
+        }
+        #expect(story.caption(at: -1) == "")                  // nothing before the first
+        #expect(story.caption(at: 0.5) == "first beat")
+        #expect(story.caption(at: 1.5) == "second beat")
+        #expect(story.caption(at: 2.5) == "third beat")
+
+        let player = StoryPlayer(story: story)
+        player.scrub(globalProgress: 0)
+        #expect(player.currentCaption == "first beat")
+        player.scrub(slide: 1, progress: 0.5)                 // t = 2.5
+        #expect(player.currentCaption == "third beat")
+    }
+
+    @Test func captionBlanksWithEmptyString() {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        let a = Circle(radius: 0.2)
+        story.slide("one") { s in
+            story.caption("shown")
+            s.add(a)
+            s.play(a.move(to: Position(1, 0, 0)), for: 1.s)
+            story.caption("")                                 // blank the band at t = 1
+            s.play(a.move(to: Position(2, 0, 0)), for: 1.s)
+        }
+        #expect(story.caption(at: 0.5) == "shown")
+        #expect(story.caption(at: 1.5) == "")                 // cleared
+    }
+
+    /// A slide's opening caption must anchor to the slide's *start* and show
+    /// through an arrival transition, even though the transition clip (here a 0.8s
+    /// `.push`) advances the live time before the caption call runs. Regression:
+    /// the caption used to stamp at the slide's end, bleeding into the next slide.
+    @Test func openingCaptionAnchorsThroughEntranceTransition() {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        let a = Circle(radius: 0.2)
+        let b = Circle(radius: 0.2)
+        b.position = .zero
+        story.slide("first") { s in
+            story.caption("first")
+            s.add(a)
+            s.play(a.move(to: Position(1, 0, 0)), for: 1.s)   // [0, 1]
+        }
+        story.slide("second", transition: .push(from: .right)) { s in
+            story.caption("second")                           // after the 0.8s push enqueue
+            s.add(b)
+        }
+        #expect(abs(story.slides[1].startTime - 1) < tolerance)
+        #expect(story.caption(at: 1.0 + 1e-3) == "second")    // active from the slide start…
+        #expect(story.caption(at: 1.4) == "second")           // …through the slide-in, not after it
+    }
+
+    // MARK: Content-entrance transition (`.push`)
+
+    /// Two slides; slide 1 is a content entrance. Slide 0 owns `prev` (auto-clears
+    /// into slide 1, so it is deferred-clear — the demo's Forces→Solve shape).
+    /// `incoming` rests at the origin and slides in from the right over slide 0.
+    private func makePushStory() -> (Scene, Story, Circle, Circle) {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        let prev = Circle(radius: 0.3)
+        let incoming = Circle(radius: 0.3)
+        incoming.position = Position(0, 0, 0)
+        story.slide("first") { s in
+            s.add(prev)
+            s.play(prev.move(to: Position(2, 0, 0)), for: 1.s)   // slide 0: [0, 1]
+        }
+        story.slide("second", transition: .push(from: .right)) { s in
+            s.add(incoming)                                       // carried in by the slide-in
+        }
+        return (scene, story, prev, incoming)
+    }
+
+    @Test func pushSlideIsMarkedEntranceAndAddsSlideInTime() {
+        let (_, story, _, _) = makePushStory()
+        #expect(!story.slides[0].entranceTransition)
+        #expect(story.slides[1].entranceTransition)
+        // The 0.8s slide-in sits ahead of the (0-duration) content add.
+        #expect(abs(story.slides[1].startTime - 1) < tolerance)
+        #expect(abs(story.slides[1].endTime - 1.8) < tolerance)
+        #expect(story.slides[1].stepBoundaries.count == 2)
+        #expect(abs(story.slides[1].stepBoundaries[1] - 1.8) < tolerance)
+    }
+
+    @Test func pushContentSlidesInOverVisiblePrevious() {
+        let (scene, story, prev, incoming) = makePushStory()
+        let player = StoryPlayer(story: story)
+        player.scrub(slide: 1, progress: 0.5)               // halfway through the slide-in (t = 1.4)
+        #expect(scene.entities.contains { $0 === incoming })  // on the board while sliding
+        #expect(scene.entities.contains { $0 === prev })      // previous board still underneath
+        #expect(incoming.position.x > 0.1)                    // travelling in from the right, not yet home
+    }
+
+    @Test func pushContentLandsAtRestAndClearsPrevious() {
+        let (scene, story, prev, incoming) = makePushStory()
+        let player = StoryPlayer(story: story)
+        player.nextSlide(); runTweens(player)               // Down → slide 0's built end (deferred)
+        #expect(player.currentSlideIndex == 0)
+        player.nextSlide(); runTweens(player)               // Down → slide 1, slide-in plays in the tween
+        #expect(player.currentSlideIndex == 1)
+        #expect(abs(incoming.position.x) < tolerance)         // landed exactly at rest
+        #expect(scene.entities.contains { $0 === incoming })
+        #expect(!scene.entities.contains { $0 === prev })     // previous cleared once the slide-in landed
+    }
+
+    /// Right-stepping into a push slide skips its off-board step 0 and rests on the
+    /// landed slide — the content is at rest, never parked off-screen.
+    @Test func pushStepRestsOnLandedNotOffscreen() {
+        let (scene, story, _, incoming) = makePushStory()
+        let player = StoryPlayer(story: story)
+        player.nextStep(); runTweens(player)                // → slide 0's deferred end
+        #expect(player.currentSlideIndex == 0)
+        player.nextStep(); runTweens(player)                // → slide 1, landed
+        #expect(player.currentSlideIndex == 1)
+        #expect(abs(incoming.position.x) < tolerance)
+        #expect(scene.entities.contains { $0 === incoming })
+    }
+
+    @Test func pushSlideInIsScrubSafe() {
+        let (scene, story, prev, incoming) = makePushStory()
+        let player = StoryPlayer(story: story)
+        player.scrub(globalProgress: 1.0)                   // end: incoming in, prev cleared
+        #expect(scene.entities.contains { $0 === incoming })
+        #expect(!scene.entities.contains { $0 === prev })
+        player.scrub(globalProgress: 0.0)                   // back to the very start
+        #expect(!scene.entities.contains { $0 === incoming }) // slide-in rewound
+        #expect(scene.entities.contains { $0 === prev })      // previous restored
+    }
+
+    /// A *clean* boundary into a push slide: slide 0 carries its content (nothing to
+    /// auto-clear), so its end coincides with the push slide's off-board slide-in
+    /// start. The prior slide's built end must stay a reachable rest (one nudge
+    /// before), and stepping must not stick.
+    @Test func pushAfterCleanBoundaryKeepsPriorEndReachable() {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        let kept = Circle(radius: 0.3)
+        let incoming = Circle(radius: 0.3)
+        incoming.position = Position(0, 0, 0)
+        story.slide("first") { s in
+            s.add(kept)
+            s.carry(kept)                                    // carried → slide 0 is a clean boundary
+            s.play(kept.move(to: Position(2, 0, 0)), for: 1.s)
+        }
+        story.slide("second", transition: .push(from: .right)) { s in
+            s.add(incoming)
+        }
+        #expect(!story.slides[0].deferredClear)
+        #expect(story.slides[1].entranceTransition)
+        let player = StoryPlayer(story: story)
+        player.nextStep(); runTweens(player)                // → slide 0's built end (just before t = 1)
+        #expect(player.currentSlideIndex == 0)
+        #expect(scene.timeline.currentTime < 1)
+        #expect(abs(scene.timeline.currentTime - 1) < 0.01)
+        player.nextStep(); runTweens(player)                // → slide 1, landed (does not stick)
+        #expect(player.currentSlideIndex == 1)
+        #expect(abs(incoming.position.x) < tolerance)
+    }
+
+    // MARK: Content-morph transition (`.morph`)
+
+    private func opacity(_ entity: Entity) -> Real {
+        entity.components[RenderStyleComponent.self]?.opacity ?? 1
+    }
+
+    /// Slide 0 owns `from` (named "shape", auto-clears into slide 1 → a morph
+    /// source). Slide 1 is a `.morph` and introduces `into` (same name) at a
+    /// different pose, so the morph pairs them and tweens `into` from `from`'s pose.
+    private func makeMorphStory() -> (Scene, Story, Circle, Rectangle) {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        let from = Circle(radius: 0.3)
+        from.name = "shape"
+        from.position = Position(-2, 0, 0)
+        let into = Rectangle(width: 1, height: 1)
+        into.name = "shape"
+        into.position = Position(2, 1, 0)
+        story.slide("first") { s in
+            s.add(from)
+            s.play(from.move(to: Position(-1, 0, 0)), for: 1.s)  // slide 0: [0, 1]
+        }
+        story.slide("second", transition: .morph()) { s in
+            s.add(into)                                          // morph target, paired by name
+        }
+        return (scene, story, from, into)
+    }
+
+    @Test func morphSlideIsMarkedEntrance() {
+        let (_, story, _, _) = makeMorphStory()
+        #expect(!story.slides[0].entranceTransition)
+        #expect(story.slides[1].entranceTransition)              // skips step 0, plays during arrival
+        #expect(abs(story.slides[1].startTime - 1) < tolerance)
+        #expect(abs(story.slides[1].endTime - 1.8) < tolerance)  // default 0.8s morph
+    }
+
+    @Test func morphMidwayInterpolatesPoseAndCrossfades() {
+        let (scene, story, from, into) = makeMorphStory()
+        let player = StoryPlayer(story: story)
+        player.scrub(slide: 1, progress: 0.5)                    // t = 1.4, halfway through the morph
+        #expect(scene.entities.contains { $0 === into })          // target inserted while morphing
+        #expect(scene.entities.contains { $0 === from })          // source still present (clears at the end)
+        // Pose lerps source(-1,0) → rest(2,1); smoothstep(0.5) = 0.5 → (0.5, 0.5).
+        #expect(abs(into.position.x - 0.5) < 0.05)
+        #expect(abs(into.position.y - 0.5) < 0.05)
+        #expect(opacity(from) < 0.99)                            // source fading out
+        #expect(opacity(into) < 0.99)                            // target fading in
+    }
+
+    @Test func morphLandsTargetAtRestAndClearsSource() {
+        let (scene, story, from, into) = makeMorphStory()
+        let player = StoryPlayer(story: story)
+        player.scrub(globalProgress: 1.0)
+        #expect(scene.entities.contains { $0 === into })
+        #expect(abs(into.position.x - 2) < tolerance)             // landed exactly at its rest pose
+        #expect(abs(into.position.y - 1) < tolerance)
+        #expect(abs(opacity(into) - 1) < tolerance)               // fully faded in
+        #expect(!scene.entities.contains { $0 === from })         // source swept by the deferred clear
+    }
+
+    @Test func morphIsScrubSafe() {
+        let (scene, story, from, into) = makeMorphStory()
+        let player = StoryPlayer(story: story)
+        player.scrub(globalProgress: 1.0)                        // morph complete
+        #expect(scene.entities.contains { $0 === into })
+        #expect(!scene.entities.contains { $0 === from })
+        player.scrub(globalProgress: 0.0)                        // back to the very start
+        #expect(!scene.entities.contains { $0 === into })         // target detached
+        #expect(scene.entities.contains { $0 === from })          // source restored…
+        #expect(abs(opacity(from) - 1) < tolerance)               // …at full opacity
     }
 }

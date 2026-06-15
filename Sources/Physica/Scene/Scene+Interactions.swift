@@ -17,9 +17,10 @@ extension Scene {
         for duration: Duration? = nil,
         easing: Easing? = nil,
         onInterrupt: InterruptionPolicy = .complete,
+        owner: Entity? = nil,
         completion: (@MainActor () -> Void)? = nil
     ) -> InteractionRunner.Handle {
-        interactItems(items, for: duration, easing: easing, onInterrupt: onInterrupt, completion: completion)
+        interactItems(items, for: duration, easing: easing, onInterrupt: onInterrupt, owner: owner, completion: completion)
     }
 
     /// Concrete overload so leading-dot factories resolve:
@@ -30,9 +31,10 @@ extension Scene {
         for duration: Duration? = nil,
         easing: Easing? = nil,
         onInterrupt: InterruptionPolicy = .complete,
+        owner: Entity? = nil,
         completion: (@MainActor () -> Void)? = nil
     ) -> InteractionRunner.Handle {
-        interactItems(items, for: duration, easing: easing, onInterrupt: onInterrupt, completion: completion)
+        interactItems(items, for: duration, easing: easing, onInterrupt: onInterrupt, owner: owner, completion: completion)
     }
 
     func interactItems(
@@ -40,9 +42,29 @@ extension Scene {
         for duration: Duration?,
         easing: Easing?,
         onInterrupt: InterruptionPolicy,
+        owner: Entity?,
         completion: (@MainActor () -> Void)?
     ) -> InteractionRunner.Handle {
         let baked = bakeClip(items, for: duration, easing: easing)
-        return interactions.run(clip: baked.clip, policy: onInterrupt, in: self, completion: completion)
+        return interactions.run(
+            clip: baked.clip, policy: onInterrupt, in: self,
+            owner: owner ?? interactions.handlerOwner, introduced: baked.introduced, completion: completion
+        )
+    }
+
+    /// Dismiss the reveal owned by `owner`: stop its in-flight clip and remove the
+    /// entities it introduced. `owner` defaults to the entity whose handler is
+    /// running, so inside a tap/double-tap handler this is just `scene.interrupt()`.
+    /// The owner-keyed peer of `interrupt(_:in:)`.
+    public func interrupt(ownedBy owner: Entity? = nil) {
+        guard let owner = owner ?? interactions.handlerOwner else { return }
+        interactions.interrupt(ownedBy: owner, in: self)
+    }
+
+    /// Whether `owner` (default: the running handler's entity) has a live
+    /// owner-tagged reveal on the board.
+    public func hasInteraction(ownedBy owner: Entity? = nil) -> Bool {
+        guard let owner = owner ?? interactions.handlerOwner else { return false }
+        return interactions.isOwned(by: owner)
     }
 }

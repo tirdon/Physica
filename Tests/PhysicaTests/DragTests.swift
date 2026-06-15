@@ -20,6 +20,70 @@ import Testing
         return dot
     }
 
+    @Test func tapHandlerReceivesSceneAndEntity() {
+        let scene = Scene()
+        var gotScene: Scene?
+        var gotEntity: Entity?
+        let dot = Circle(radius: 0.5)
+        dot.components[TapComponent.self] = TapComponent { s, e in gotScene = s; gotEntity = e }
+        scene.add(dot)
+        scene.seek(to: 0)
+        scene.dispatch(.pointerDown(.zero))
+        scene.dispatch(.pointerUp(.zero))
+        #expect(gotScene === scene)
+        #expect(gotEntity === dot)
+    }
+
+    @Test func doubleTapHandlerReceivesSceneAndEntity() {
+        let scene = Scene()
+        var gotScene: Scene?
+        var gotEntity: Entity?
+        let dot = Circle(radius: 0.5)
+        dot.components[DoubleTapComponent.self] = DoubleTapComponent { s, e in gotScene = s; gotEntity = e }
+        scene.add(dot)
+        scene.seek(to: 0)
+        scene.dispatch(.doubleClick(.zero))
+        #expect(gotScene === scene)
+        #expect(gotEntity === dot)
+    }
+
+    @Test func legacyOneArgTapStillFires() {
+        let scene = Scene()
+        var tappedEntity: Entity?
+        let dot = Circle(radius: 0.5)
+        dot.components[TapComponent.self] = TapComponent { e in tappedEntity = e }
+        scene.add(dot)
+        scene.seek(to: 0)
+        scene.dispatch(.pointerDown(.zero))
+        scene.dispatch(.pointerUp(.zero))
+        #expect(tappedEntity === dot)
+    }
+
+    @Test func handlerOwnerIsImplicitInsideTapAndDoubleTap() {
+        let scene = Scene()
+        let owner = Circle(radius: 0.5)
+        let cx = Circle(radius: 0.2)
+        // Neither handler passes an explicit owner — the coordinator supplies the
+        // tapped entity, so the reveal is owned by `owner` and the double-tap clears it.
+        owner.components[TapComponent.self] = TapComponent { current, _ in
+            current.interact(.draw(cx), for: 0.6.s)
+        }
+        owner.components[DoubleTapComponent.self] = DoubleTapComponent { current, _ in
+            current.interrupt()
+        }
+        scene.add(owner)
+        scene.seek(to: 0)
+
+        scene.dispatch(.pointerDown(.zero))
+        scene.dispatch(.pointerUp(.zero))
+        #expect(scene.entities.contains(where: { $0 === cx }))
+        #expect(scene.hasInteraction(ownedBy: owner))
+
+        scene.dispatch(.doubleClick(.zero))
+        #expect(!scene.entities.contains(where: { $0 === cx }))
+        #expect(!scene.hasInteraction(ownedBy: owner))
+    }
+
     @Test func topmostPaintedEntityWins() {
         let scene = Scene()
         var tappedFirst = false

@@ -268,7 +268,7 @@ public final class Scene: Identifiable {
     /// into `consumedPairIDs`.
     func bakeClip(
         _ items: [any Animatable], for duration: Duration?, easing: Easing?
-    ) -> (clip: AnimationClip, pairs: [AnimationPair]) {
+    ) -> (clip: AnimationClip, pairs: [AnimationPair], introduced: [Entity]) {
         var tracks: [any AnimationTrackProtocol] = []
         var pairs: [AnimationPair] = []
         var labels: [String] = []
@@ -311,7 +311,7 @@ public final class Scene: Identifiable {
         }
 
         let clip = AnimationClip(label: labels.joined(separator: " + "), tracks: tracks)
-        return (clip, pairs)
+        return (clip, pairs, introduced)
     }
 
     /// Idle clip — timeline time passes, custom systems keep updating.

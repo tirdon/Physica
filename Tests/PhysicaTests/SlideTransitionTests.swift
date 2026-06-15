@@ -27,7 +27,9 @@ import Testing
         story.slide("a", transition: .push(from: .left)) { s in
             s.play(s.frame.shift(Position(1, 0, 0)), for: 1.s)
         }
-        // push (0.8s) is step 0; the author shift (1.0s) is step 1.
+        // The push slide-in (0.8s) is step 0; the author shift (1.0s) is step 1.
+        // (Here the content introduces nothing, so the slide-in is inert but still
+        // occupies its window.)
         let bounds = story.slides[0].stepBoundaries
         #expect(bounds.count == 3)
         #expect(abs(bounds[0] - 0) < tolerance)
@@ -87,27 +89,33 @@ import Testing
         #expect(!scene.entities.contains { $0.name == "transition" }) // transient overlay is not
     }
 
-    // MARK: Camera push / zoom (ride the SceneCamera proxy)
+    // MARK: Content push (slides the slide's own content in) / camera zoom
 
-    @Test func pushTransitionMovesCameraAndRewinds() {
+    @Test func pushTransitionSlidesContentInAndRewinds() {
         let scene = Scene()
         let story = Story(scene: scene)
+        let incoming = Circle(radius: 0.3)
+        incoming.position = Position(0, 0, 0)                                          // rests at the origin
         story.slide("a") { s in s.play(s.frame.shift(Position(0, 1, 0)), for: 1.s) }   // [0, 1]
-        story.slide("b", transition: .push(from: .right)) { _ in }                     // [1, 1.8]
+        story.slide("b", transition: .push(from: .right)) { s in s.add(incoming) }     // slide-in [1, 1.8]
         let frameWidth = scene.frameBounds.size.x
         let player = StoryPlayer(story: story)
 
-        // At the slide start the camera is offset one frame toward the edge.
+        // At the slide-in start the content is on the board but one frame off toward
+        // the edge — the push adds it itself, ahead of the content's own add.
         player.scrub(slide: 1, progress: 0.0)
-        #expect(abs(scene.camera.transform.position.x - frameWidth) < 0.3)
+        #expect(scene.entities.contains { $0 === incoming })
+        #expect(abs(incoming.position.x - frameWidth) < 0.3)
 
-        // Eased to rest by the end of the push.
+        // Eased home by the end of the slide-in (the camera never moved).
         player.scrub(slide: 1, progress: 1.0)
-        #expect(abs(scene.camera.transform.position.x) < 0.05)
-
-        // Rewinding before the slide restores the resting camera.
-        player.scrub(slide: 0, progress: 0.3)
+        #expect(abs(incoming.position.x) < 0.05)
         #expect(abs(scene.camera.transform.position.x) < tolerance)
+
+        // Rewinding before the slide takes the content back off the board.
+        player.scrub(slide: 0, progress: 0.3)
+        #expect(!scene.entities.contains { $0 === incoming })
+        #expect(abs(incoming.position.x) < tolerance)   // and restores its resting position
     }
 
     @Test func zoomTransitionEasesToRestAndRewinds() {

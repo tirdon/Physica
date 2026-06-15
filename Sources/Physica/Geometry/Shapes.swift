@@ -157,26 +157,34 @@ public final class Line: PathEntity {
     }
 }
 
-/// Line with a solid triangular tip at the end point.
+/// Line with a solid triangular tip at the end point. The stroke cap defaults
+/// to `.round`, so the tip apex and shaft ends read as soft points. Set
+/// `doubleHeaded` for a matching tip at `start` too (number-line / axis style).
 @MainActor
 public final class Arrow: PathEntity {
     public var start: Position { didSet { rebuild() } }
     public var end: Position { didSet { rebuild() } }
     public var headLength: Real { didSet { rebuild() } }
     public var headWidth: Real { didSet { rebuild() } }
+    /// Also draw a tip at `start`, pointing back — both terminals are arrows.
+    public var doubleHeaded: Bool { didSet { rebuild() } }
 
     public init(
         start: Position, end: Position,
         headLength: Real = 0.25, headWidth: Real = 0.18,
-        width: Real = 0.04, color: Color = .yellow
+        width: Real = 0.04, color: Color = .yellow,
+        doubleHeaded: Bool = false, cap: StrokeCap = .round
     ) {
         self.start = start
         self.end = end
         self.headLength = headLength
         self.headWidth = headWidth
+        self.doubleHeaded = doubleHeaded
         super.init(
             path: Path(),
-            style: RenderStyleComponent(color: color, strokeColor: color, strokeWidth: width)
+            style: RenderStyleComponent(
+                color: color, strokeColor: color, strokeWidth: width, cap: cap
+            )
         )
         rebuild()
     }
@@ -199,13 +207,23 @@ public final class Arrow: PathEntity {
         let unit = direction / length
         let normal = SIMD2<Real>(-unit.y, unit.x)
         let shaftEnd = b - unit * headLength
+        // A start tip eats one head-length off `a`, so the shaft runs
+        // base-to-base between the two heads.
+        let shaftStart = doubleHeaded ? a + unit * headLength : a
 
-        var result = Path.line(from: a, to: shaftEnd)
+        var result = Path.line(from: shaftStart, to: shaftEnd)
         result = result.appending(.polygon(points: [
             b,
             shaftEnd + normal * (headWidth / 2),
             shaftEnd - normal * (headWidth / 2),
         ]))
+        if doubleHeaded {
+            result = result.appending(.polygon(points: [
+                a,
+                shaftStart + normal * (headWidth / 2),
+                shaftStart - normal * (headWidth / 2),
+            ]))
+        }
         path = result
     }
 }

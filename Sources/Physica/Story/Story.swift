@@ -23,6 +23,11 @@ public struct Slide: Sendable, Equatable {
     /// shown before it clears (otherwise seeking to the boundary fast-forwards the
     /// clear and the last step would render the content already gone).
     let deferredClear: Bool
+    /// Whether this slide opens with a content-entrance transition (`.push`): its
+    /// content slides in over the previous board. Its step 0 is the off-board
+    /// "pre-slide-in" state, so the player skips it as a rest — the slide-in plays
+    /// during the arrival tween and the first rest is the landed step 1.
+    let entranceTransition: Bool
 
     public var duration: TimeInterval { endTime - startTime }
     /// Number of rests in this slide (1 = a single instantaneous slide).
@@ -46,15 +51,25 @@ public struct StoryOptions: Sendable {
     public var minimumSlidePixels: Real
     /// Tween rate for `nextStep`/`nextSlide`, in timeline-seconds per wall-second.
     public var stepTweenSpeed: Real
+    /// Autoplay dwell: wall-seconds the player rests on a beat before advancing to
+    /// the next (the step's own animation plays during the tween, then it dwells).
+    public var autoplayDwell: TimeInterval
+    /// Whether autoplay restarts from the first beat after the last, instead of
+    /// stopping (kiosk / looping-explainer mode).
+    public var autoplayLoops: Bool
 
     public init(
         pixelsPerSecond: Real = 480,
         minimumSlidePixels: Real = 400,
-        stepTweenSpeed: Real = 2
+        stepTweenSpeed: Real = 2,
+        autoplayDwell: TimeInterval = 2,
+        autoplayLoops: Bool = false
     ) {
         self.pixelsPerSecond = pixelsPerSecond
         self.minimumSlidePixels = minimumSlidePixels
         self.stepTweenSpeed = stepTweenSpeed
+        self.autoplayDwell = autoplayDwell
+        self.autoplayLoops = autoplayLoops
     }
 }
 
@@ -86,6 +101,22 @@ public final class Story {
         self.options = options
     }
 
+    /// The scene background, surfaced on the story so authors set it without
+    /// reaching into `story.scene` (`story.background = .blackboard`).
+    public var background: SceneBackground {
+        get { scene.background }
+        set { scene.background = newValue }
+    }
+
+    /// Adds global scaffolding to the board (forwards to `scene.add`). Call this
+    /// *before/between* slides for content that should persist across the whole
+    /// story — globals are never part of any slide's own auto-clear set. Inside a
+    /// slide closure use the `s.add(...)` you're given instead (slide-scoped).
+    @discardableResult
+    public func add(_ items: any Animatable...) -> Animation {
+        scene.addItems(items)
+    }
+
     /// Records a slide. Content is **slide-scoped by default**: the entities this
     /// slide introduces auto-clear when the viewer advances to the next slide.
     /// Opt specific content out with `s.carry(x)` (persists onward) or take things
@@ -97,22 +128,52 @@ public final class Story {
     /// derives the slide's range and step boundaries, and records its own-introduced
     /// set (minus `carry`/in-slide removals) as the deferred auto-clear, flushed at
     /// the next slide's start. The content must enqueue at least one clip.
+    ///
+    /// A `transition: .push(from:)` makes the slide a **content entrance**: its
+    /// introduced content slides in over the previous board (the previous slide's
+    /// clear is deferred until the slide-in finishes, so it shows through behind).
     @discardableResult
     public func slide(
         _ title: String,
         transition: SlideTransition = .none,
         _ content: (Scene) -> Void
     ) -> Slide {
-        // Fire the *previous* slide's auto-clear now, at this slide's start — its
-        // content stayed visible through its own duration and drops as the viewer
-        // crosses into this slide. The last slide's set is never flushed.
-        flushPendingAutoClear()
+        let isEntrance = transition.isContentEntrance
+
+        // The *previous* slide's deferred auto-clear. A normal slide fires it now,
+        // at this slide's start (the old board drops as the viewer crosses in). A
+        // content entrance (`.push`) fires it *after* its slide-in instead, so the
+        // previous board stays visible underneath while the new content slides over.
+        let previousClear = pendingAutoClear
+        pendingAutoClear = []
+        if !isEntrance {
+            scene.enqueueSlideClear(previousClear)
+        }
 
         let startTime = scene.timeline.duration
         let startClip = scene.timeline.clips.count
-        // The transition is the slide's first clip (step 0) — it plays on arrival
-        // and is content-agnostic, so it runs before the slide's own content.
-        transition.enqueue(on: scene)
+        // The slide's first caption anchors here (covering any arrival transition),
+        // even though the transition/content clips below advance the live time.
+        pendingCaptionStart = startTime
+
+        // Content-agnostic transitions (fade/zoom) are the slide's first clip,
+        // ahead of the content. A content-arrival transition (`.push`/`.morph`) is
+        // built *after* the content (it needs the introduced set, and morph the
+        // previous set too) but enqueued here so it plays first; its `introduced`/
+        // `sources` are filled in below and the previous clear follows it.
+        var arrival: (any ContentArrivalTrack)?
+        if isEntrance {
+            let track = transition.makeArrivalTrack()
+            arrival = track
+            scene.timeline.enqueue(AnimationClip(label: track.label, tracks: [track]))
+            scene.enqueueSlideClear(previousClear)
+        } else {
+            transition.enqueue(on: scene)
+        }
+
+        // The content closure's own clips begin here, so `introduced`/`removed`
+        // scan only those — the injected slide-in/clear are excluded.
+        let contentStartClip = scene.timeline.clips.count
         content(scene)
         let endClip = scene.timeline.clips.count
         // An empty slide is allowed: a zero-duration rest on the globals already on
@@ -123,13 +184,20 @@ public final class Story {
         // `carry`-ed forward and any it already removed within the slide (a `.fade`
         // overlay or `.highlight` border, introduced *and* removed in one clip).
         // Globals (added before/between slides) aren't in `introduced`.
-        let introduced = introducedEntities(in: startClip..<endClip)
+        let scanStart = isEntrance ? contentStartClip : startClip
+        let introduced = introducedEntities(in: scanStart..<endClip)
         let carried = Set(scene.carriedThisSlide.map(ObjectIdentifier.init))
-        let removedInSlide = removedEntities(in: startClip..<endClip)
+        let removedInSlide = removedEntities(in: scanStart..<endClip)
         pendingAutoClear = introduced.filter {
             let id = ObjectIdentifier($0)
             return !carried.contains(id) && !removedInSlide.contains(id)
         }
+        // Hand the arrival track its content: `introduced` (carried in / morph
+        // targets) and, for morph, `previousClear` as the morph sources. It adds
+        // the targets itself so they show mid-arrival, ahead of the content's own
+        // 0-duration adds.
+        arrival?.introduced = introduced
+        arrival?.sources = previousClear
         scene.resetSlideCarry()
 
         var boundaries: [TimeInterval] = [startTime]
@@ -146,17 +214,12 @@ public final class Story {
         let slide = Slide(
             index: slides.count, title: title,
             startTime: startTime, endTime: endTime,
-            stepBoundaries: boundaries, deferredClear: !pendingAutoClear.isEmpty
+            stepBoundaries: boundaries, deferredClear: !pendingAutoClear.isEmpty,
+            entranceTransition: isEntrance
         )
         slides.append(slide)
+        pendingCaptionStart = nil  // a between-slides caption stamps at the live time
         return slide
-    }
-
-    /// Enqueues the previous slide's deferred auto-clear at this slide's start
-    /// (no-op when that slide kept everything). Then this slide's set is computed.
-    private func flushPendingAutoClear() {
-        scene.enqueueSlideClear(pendingAutoClear)
-        pendingAutoClear = []
     }
 
     /// Entities removed (via any `RemoveEntityTrack`) by the clips in `range` —
@@ -204,6 +267,36 @@ public final class Story {
     /// Buttons for the web shell, in registration order.
     public var actionList: [(id: String, label: String)] {
         actions.map { ($0.id, $0.label) }
+    }
+
+    // Narration captions: a fixed subtitle band synced to the steps, decoupled
+    // from in-scene text. Each is time-stamped at the moment it is recorded during
+    // slide building; the one active at a time t is the last recorded at or before
+    // t (so it persists until the next). The web shell renders the active caption;
+    // it doubles as the script when autoplaying.
+    private var captionEntries: [(time: TimeInterval, text: String)] = []
+    /// The current slide's start time, pending until its first caption claims it.
+    /// A slide's *opening* caption anchors to the slide start (so it covers an
+    /// arrival transition — `.push`/`.fade`/`.zoom` — whose clip would otherwise
+    /// delay the stamp); later captions in the slide stamp at the live time.
+    private var pendingCaptionStart: TimeInterval?
+
+    /// Records a narration caption starting *now* (the current timeline position),
+    /// active until the next caption. Call inside a slide closure interleaved with
+    /// content — `story.caption("Resolve the forces"); s.play(.draw(weight))` — and
+    /// pass `""` to blank the band. A slide's first caption anchors to the slide's
+    /// start, so it shows through an entrance transition rather than after it.
+    public func caption(_ text: String) {
+        let time = pendingCaptionStart ?? scene.timeline.duration
+        pendingCaptionStart = nil
+        captionEntries.append((time: time, text: text))
+    }
+
+    /// The narration caption active at `time` (`""` when none has been recorded yet).
+    public func caption(at time: TimeInterval) -> String {
+        var result = ""
+        for entry in captionEntries where entry.time <= time + 1e-6 { result = entry.text }
+        return result
     }
 
     func action(id: String) -> StoryAction? {

@@ -31,6 +31,8 @@ public final class StoryRuntime {
     private var closures: [JSClosure] = []
 
     private var hud: JSValue = .undefined
+    private var caption: JSValue = .undefined
+    private var lastCaption = ""
     private var canvas: JSValue = .undefined
 
     // Scroll ↔ time mapping: spacer heights sum to the scrollable range.
@@ -65,7 +67,8 @@ public final class StoryRuntime {
         overlayHostID: String = "scene-host",
         trackID: String = "story-track",
         actionsID: String = "story-actions",
-        hudID: String = "story-hud"
+        hudID: String = "story-hud",
+        captionID: String = "story-caption"
     ) async -> StoryRuntime {
         let console = JSObject.global.console
         _ = console.log("Physica story:\n" + story.debugString)
@@ -80,6 +83,7 @@ public final class StoryRuntime {
         runtime.buildSpacers(trackID: trackID)
         runtime.buildActions(actionsID: actionsID)
         runtime.hud = document.getElementById(hudID)
+        runtime.caption = document.getElementById(captionID)
         runtime.canvas = document.getElementById(canvasID)
         runtime.installScrollAndKeys()
 
@@ -110,16 +114,22 @@ public final class StoryRuntime {
     // MARK: Per-frame
 
     private func frame(deltaTime: TimeInterval) {
+        // Always tick: it advances an in-flight tween *and* the autoplay dwell (a
+        // no-op when neither is active). An autoplay dwell can start a tween here.
+        let wasTweening = player.isTweening
+        player.tick(deltaTime: deltaTime)
         if player.isTweening {
-            player.tick(deltaTime: deltaTime)
             mirrorScrollFromPlayer()
             pendingScrollY = nil  // ignore scroll echoes while a tween drives the playhead
+        } else if wasTweening {
+            pendingScrollY = nil  // swallow the echo on the frame a tween lands
         } else if let target = pendingScrollY {
             pendingScrollY = nil
             scrub(toScrollY: target)
         }
         engine.tick(deltaTime: deltaTime)  // renders + advances interactions/drag/layout
         overlay?.sync()
+        syncCaption()
         if player.currentSlideIndex != lastSlide {
             lastSlide = player.currentSlideIndex
             syncHUD()
@@ -235,6 +245,7 @@ public final class StoryRuntime {
         case "ArrowUp": _ = event.preventDefault(); player.previousSlide()
         case "ArrowRight": _ = event.preventDefault(); player.nextStep()
         case "ArrowLeft": _ = event.preventDefault(); player.previousStep()
+        case " ", "Spacebar": _ = event.preventDefault(); player.toggleAutoplay()  // play/pause
         default: break
         }
         syncOverlayModifiers(event, isUp: false)
@@ -322,6 +333,18 @@ public final class StoryRuntime {
         guard hud.object != nil, story.slides.indices.contains(player.currentSlideIndex) else { return }
         let slide = story.slides[player.currentSlideIndex]
         hud.textContent = .string("\(slide.index + 1)/\(story.slides.count)  \(slide.title)")
+    }
+
+    /// Mirrors the active narration caption into the band, toggling `.show` so an
+    /// empty caption fades the band out (CSS transition). Deduped on the last text
+    /// so we touch the DOM only when the caption actually changes.
+    private func syncCaption() {
+        guard caption.object != nil else { return }
+        let text = player.currentCaption
+        guard text != lastCaption else { return }
+        lastCaption = text
+        caption.textContent = .string(text)
+        caption.className = .string(text.isEmpty ? "" : "show")
     }
 }
 #endif

@@ -154,13 +154,19 @@ public final class Plane: Group {
         )
         gridEntity.name = "grid"
         self.grid = gridEntity
-        let xArrow = Arrow(start: .origin, end: Position(1, 0, 0), width: 0.02, color: axisColor)
+        // Tips at both terminals (Arrow defaults to a round cap and the same
+        // color/width we pass, so no extra `.stroke` is needed).
+        let xArrow = Arrow(
+            start: .origin, end: Position(1, 0, 0),
+            width: 0.02, color: axisColor, doubleHeaded: true
+        )
         xArrow.name = "xAxis"
-        xArrow.stroke(axisColor, width: 0.02, cap: .round)
         self.xAxis = xArrow
-        let yArrow = Arrow(start: .origin, end: Position(0, 1, 0), width: 0.02, color: axisColor)
+        let yArrow = Arrow(
+            start: .origin, end: Position(0, 1, 0),
+            width: 0.02, color: axisColor, doubleHeaded: true
+        )
         yArrow.name = "yAxis"
-        yArrow.stroke(axisColor, width: 0.02, cap: .round)
         self.yAxis = yArrow
         let ticksEntity = PathEntity(
             path: Path(),
@@ -337,7 +343,7 @@ public final class Plane: Group {
     }
 
     /// Repositions the axis arrows (their own setters rebuild their paths);
-    /// tips sit at the positive ends, sized from `axis.tipLength`.
+    /// the double-headed tips sit at both terminals, sized from `axis.tipLength`.
     private func layoutAxes() {
         let head = axis.tipLength
         let xStart = localPoint(xRange.lowerBound, axisYData) - SIMD2(axis.overhang, 0)

@@ -166,4 +166,73 @@ import Testing
         scene.interact(dot.move(to: Position(1, 0, 0)), for: 1.s)
         #expect(scene.interactions.debugString.contains("move"))
     }
+
+    // MARK: Owner-tagged reveals — interact(owner:) / interrupt(ownedBy:)
+
+    @Test func interactOwnerRegistersReveal() {
+        let scene = Scene()
+        let owner = Circle(radius: 0.3)
+        scene.add(owner)
+        let cx = Circle(radius: 0.2)
+        let cy = Circle(radius: 0.2)
+        #expect(!scene.hasInteraction(ownedBy: owner))
+        scene.interact(.draw(cx), .draw(cy), for: 0.6.s, owner: owner)
+        #expect(scene.hasInteraction(ownedBy: owner))
+        #expect(scene.entities.contains(where: { $0 === cx }))
+        #expect(scene.entities.contains(where: { $0 === cy }))
+    }
+
+    @Test func interruptOwnedByRemovesAfterDrawCompletes() {
+        let scene = Scene()
+        let owner = Circle(radius: 0.3)
+        scene.add(owner)
+        let cx = Circle(radius: 0.2)
+        let cy = Circle(radius: 0.2)
+        scene.interact(.draw(cx), .draw(cy), for: 0.5.s, owner: owner)
+        scene.update(deltaTime: 0.6) // draw finishes; arrows persist past the clip
+        #expect(scene.interactions.isIdle)
+        #expect(scene.entities.contains(where: { $0 === cx }))
+        #expect(scene.hasInteraction(ownedBy: owner))
+        scene.interrupt(ownedBy: owner)
+        #expect(!scene.entities.contains(where: { $0 === cx }))
+        #expect(!scene.entities.contains(where: { $0 === cy }))
+        #expect(!scene.hasInteraction(ownedBy: owner))
+    }
+
+    @Test func interruptOwnedByRemovesMidDrawAndStopsReinsert() {
+        let scene = Scene()
+        let owner = Circle(radius: 0.3)
+        scene.add(owner)
+        let cx = Circle(radius: 0.2)
+        scene.interact(.draw(cx), for: 0.6.s, owner: owner)
+        scene.update(deltaTime: 0.2) // mid-flight
+        #expect(scene.entities.contains(where: { $0 === cx }))
+        scene.interrupt(ownedBy: owner)
+        #expect(!scene.entities.contains(where: { $0 === cx }))
+        #expect(scene.interactions.isIdle)
+        // The dropped draw must not re-insert cx on the next advance.
+        scene.update(deltaTime: 0.3)
+        #expect(!scene.entities.contains(where: { $0 === cx }))
+    }
+
+    @Test func interruptAllClearsOwnerRevealsButLandsOthers() {
+        let scene = Scene()
+        let owner = Circle(radius: 0.3)
+        let plain = Circle(radius: 0.2)
+        scene.add(owner, plain)
+        scene.seek(to: 0)
+        let reveal = Circle(radius: 0.2)
+        scene.interact(.draw(reveal), for: 0.5.s, owner: owner)
+        scene.update(deltaTime: 0.6) // reveal completes and persists
+        scene.interact(plain.move(to: Position(2, 0, 0)), for: 1.s) // non-owner, mid-flight
+        scene.update(deltaTime: 0.2)
+        scene.interactions.interruptAll(in: scene)
+        // The owner reveal is cleared even though it had finished drawing...
+        #expect(!scene.entities.contains(where: { $0 === reveal }))
+        #expect(!scene.hasInteraction(ownedBy: owner))
+        // ...while the non-owner clip landed (default .complete) and its target stays.
+        #expect(abs(plain.position.x - 2) < tolerance)
+        #expect(scene.entities.contains(where: { $0 === plain }))
+        #expect(scene.interactions.isIdle)
+    }
 }

@@ -40,9 +40,10 @@ struct PlottingTests {
         // Subgrid (2 subdivisions): half-step lines skipping the majors —
         // 4 vertical + 2 horizontal.
         #expect(plane.subgrid.path.contours.count == 6)
-        // Each axis is an Arrow entity: shaft + filled tip head.
-        #expect(plane.xAxis.path.contours.count == 2)
-        #expect(plane.yAxis.path.contours.count == 2)
+        // Each axis is a double-headed Arrow: shaft + a filled tip at each end.
+        #expect(plane.xAxis.doubleHeaded)
+        #expect(plane.xAxis.path.contours.count == 3)
+        #expect(plane.yAxis.path.contours.count == 3)
         // 5 x-ticks + 3 y-ticks.
         #expect(plane.ticks.path.contours.count == 8)
         // subdivisions: 1 → no minor lines.
@@ -58,7 +59,7 @@ struct PlottingTests {
 
     @Test func axisArrowsAndOptionsAdjustLive() {
         let plane = Plane(x: -2...2, y: -1...1, gridStep: 1)
-        // Arrows span the range plus overhang, tips at the positive ends.
+        // Arrows span the range plus overhang, tips at both terminals.
         #expect(approx(plane.xAxis.end.x, 2.3, tolerance: 1e-4))
         #expect(approx(plane.yAxis.end.y, 1.3, tolerance: 1e-4))
         #expect(approx(plane.xAxis.headLength, 0.18, tolerance: 1e-4))
@@ -72,7 +73,7 @@ struct PlottingTests {
 
         // Arrows are real entities — adjust them directly…
         plane.xAxis.headLength = 0.4
-        #expect(plane.xAxis.path.contours.count == 2)
+        #expect(plane.xAxis.path.contours.count == 3)  // shaft + a head each end
         // …while assigning options re-applies them over direct tweaks.
         var options = plane.axis
         options.overhang = 1
