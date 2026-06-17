@@ -8,9 +8,9 @@ let package = Package(
 	platforms: [.macOS(.v26)],
 	products: [
 		.library(name: "Physica", targets: ["Physica"]),
-		// `PhysicaDemo` and `Example0` are wasm executables; SwiftPM exposes an
-		// implicit executable product for each, so PackageToJS can target them
-		// with `--product PhysicaDemo` / `--product Example0`.
+		// Example executables live under Sources/PhysicaDemo/{Example0,Example1}.
+		// SwiftPM exposes an implicit executable product for each, so
+		// PackageToJS can target them with `--product Example1` / `--product Example0`.
 	],
 	dependencies: [.package(url: "https://github.com/swiftwasm/JavaScriptKit.git", branch: "main" )],
     targets: [
@@ -30,8 +30,15 @@ let package = Package(
 				),
 			]
 		),
-        .executableTarget( // Demo — index.html / story.html (see CLAUDE.md)
-            name: "PhysicaDemo",
+        .testTarget(
+            name: "PhysicaTests",
+            dependencies: ["Physica"]
+        ),
+
+		// Examples — each a standalone wasm executable under Sources/PhysicaDemo/.
+        .executableTarget(
+            name: "Example1",
+			path: "Sources/PhysicaDemo/Example1",
 			dependencies: [
 				.product(name: "JavaScriptKit", package: "JavaScriptKit"),
 				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
@@ -41,14 +48,9 @@ let package = Package(
 				.plugin(name: "BridgeJS", package: "JavaScriptKit")
 			]
         ),
-        .testTarget(
-            name: "PhysicaTests",
-            dependencies: ["Physica"]
-        ),
-
-		// Examples — each a standalone wasm executable (its own scene + bundle).
         .executableTarget(
             name: "Example0",
+			path: "Sources/PhysicaDemo/Example0",
 			dependencies: [
 				.product(name: "JavaScriptKit", package: "JavaScriptKit"),
 				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
