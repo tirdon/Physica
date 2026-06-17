@@ -197,18 +197,46 @@ struct PlottingTests {
         #expect(approx(graph.lines[0][0].y, 2, tolerance: 1e-4))
     }
 
-    @Test func graphSamplesFunctionAndClampsToRange() {
+    @Test func graphKeepsRawSamplesAndClipsRenderToBoard() {
         let plane = Plane(x: -2...2, y: -1...1, gridStep: 1)
         let graph = plane.graph(of: { $0 * $0 }, samples: 41)
 
+        // Sample data is RAW (unclamped) so re-plots stay topology-stable: the
+        // endpoint keeps x² = 4 instead of saturating at the y-range top.
         #expect(graph.lines.count == 1)
         #expect(graph.lines[0].count == 41)
-        // Endpoints span the x range; x² = 4 clamps to the y range top.
         #expect(approx(graph.lines[0][0].x, -2, tolerance: 1e-4))
-        #expect(approx(graph.lines[0][0].y, 1, tolerance: 1e-4))
-        // Middle sample sits at the vertex.
+        #expect(approx(graph.lines[0][0].y, 4, tolerance: 1e-4))
         #expect(approx(graph.lines[0][20].x, 0, tolerance: 1e-4))
         #expect(approx(graph.lines[0][20].y, 0, tolerance: 1e-4))
+
+        // The RENDERED path is clipped to the board: x² ≤ 1 only for |x| ≤ 1,
+        // so the visible curve spans x ∈ [-1, 1] and never leaves the band.
+        let bounds = graph.path.bounds
+        #expect(approx(bounds.min.x, -1, tolerance: 1e-2))
+        #expect(approx(bounds.max.x, 1, tolerance: 1e-2))
+        #expect(bounds.max.y <= 1 + 1e-6)
+        #expect(bounds.min.y >= -1 - 1e-6)
+    }
+
+    // Regression: y = x sampled across x ∈ [-2.2, 2.2] with a tighter y range
+    // used to clamp out-of-range samples to ±1.6, drawing flat "shoulders" from
+    // the corners out to the x-range edges. The curve must now stop at the board.
+    @Test func graphClipsToBoardWithoutShoulders() {
+        let plane = Plane(x: -2.2...2.2, y: -1.6...1.6, gridStep: 1)
+        let graph = plane.graph(of: { $0 })
+
+        // Raw samples still span the full x range (topology preserved).
+        #expect(approx(graph.lines[0].first!.x, -2.2, tolerance: 1e-4))
+        #expect(approx(graph.lines[0].last!.x, 2.2, tolerance: 1e-4))
+
+        // One unbroken diagonal, corner to corner — no flat run out to ±2.2.
+        #expect(graph.path.contours.count == 1)
+        let bounds = graph.path.bounds
+        #expect(approx(bounds.min.x, -1.6, tolerance: 2e-2))
+        #expect(approx(bounds.max.x, 1.6, tolerance: 2e-2))
+        #expect(approx(bounds.min.y, -1.6, tolerance: 2e-2))
+        #expect(approx(bounds.max.y, 1.6, tolerance: 2e-2))
     }
 
     @Test func graphPlotMorphsDataAndScrubsBack() {

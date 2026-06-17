@@ -12,7 +12,7 @@ async function initBrowser(_options) {
     };
     let module = options.module;
     if (!module) {
-        module = fetch(new URL("PhysicsEngine.wasm", import.meta.url))
+        module = fetch(new URL("PhysicaDemo.wasm", import.meta.url))
     }
     const instantiateOptions = await defaultBrowserSetup({
         module,

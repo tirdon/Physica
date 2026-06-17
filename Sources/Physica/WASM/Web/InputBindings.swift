@@ -24,6 +24,10 @@ final class InputBindings {
     private var activePointerID: Double?
     private var activeKind: PointerKind = .mouse
 
+    /// When false, Shift / Option+Shift stop driving the index overlays — editor
+    /// hosts (Story Studio) repurpose Shift for multi-select.
+    var syncsDebugOverlay = true
+
     init(engine: Engine, scene: Scene, canvas: JSValue) {
         self.engine = engine
         self.scene = scene
@@ -50,6 +54,7 @@ final class InputBindings {
     /// event so the two modes hand off cleanly as Option is pressed or released
     /// while Shift stays down.
     private func syncOverlayModifiers(_ event: JSValue, isUp: Bool) {
+        guard syncsDebugOverlay else { return }   // editor hosts own Shift (multi-select)
         let shift = event.shiftKey.boolean ?? false
         let alt = event.altKey.boolean ?? false
         engine.isInteractiveOverlayActive = shift && alt

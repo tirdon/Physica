@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Physica · Story Studio</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      background: #0a0f0c;
+      color: #e8e8ec;
+      font: 14px/1.4 -apple-system, system-ui, sans-serif;
+    }
+
+    /* Editor layout: slides | stage | inspector, with a timeline along the bottom. */
+    #studio {
+      display: grid;
+      height: 100vh;
+      grid-template-columns: 212px 1fr 248px;
+      grid-template-rows: 1fr 168px;
+      grid-template-areas:
+        "slides stage inspector"
+        "timeline timeline timeline";
+    }
+    #studio-slides    { grid-area: slides;    border-right: 1px solid rgba(120,160,140,.12); }
+    #scene-host       { grid-area: stage;     position: relative; overflow: hidden; }
+    #studio-inspector { grid-area: inspector; border-left: 1px solid rgba(120,160,140,.12); }
+    #studio-timeline  { grid-area: timeline;  border-top: 1px solid rgba(120,160,140,.12); }
+    .panel { background: #0d1410; overflow-y: auto; }
+
+    canvas#main {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #0c120e;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    /* Floating tool palette over the stage (brainec-style). */
+    #studio-toolbar {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 12px;
+      background: rgba(18, 26, 20, 0.82);
+      border: 1px solid rgba(120, 160, 140, 0.18);
+      backdrop-filter: blur(8px);
+      z-index: 3;
+      max-width: calc(100% - 16px);
+    }
+    /* A labelled cluster of tools (Geometry / Text / Actions). */
+    .studio-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .studio-group + .studio-group { padding-left: 8px; border-left: 1px solid rgba(120, 160, 140, 0.2); }
+    .studio-group-label {
+      font: 9px/1 ui-monospace, monospace; letter-spacing: .14em;
+      text-transform: uppercase; color: #8aa597;
+    }
+    .studio-group-row { display: flex; gap: 6px; }
+    .studio-tool {
+      padding: 7px 10px;
+      border: 1px solid rgba(120, 160, 140, 0.22);
+      border-radius: 8px;
+      background: rgba(30, 42, 34, 0.9);
+      color: #dfeee4;
+      cursor: pointer;
+      font: 12.5px/1 -apple-system, system-ui, sans-serif;
+      white-space: nowrap;
+    }
+    .studio-tool:hover { background: rgba(44, 62, 50, 0.96); }
+    .studio-tool:active { transform: translateY(1px); }
+
+    /* Panel chrome */
+    .panel-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 12px; position: sticky; top: 0; background: #0d1410;
+      font: 11px/1 ui-monospace, monospace; letter-spacing: .1em;
+      text-transform: uppercase; color: #8aa597;
+      border-bottom: 1px solid rgba(120,160,140,.08);
+    }
+    .panel-add {
+      width: 22px; height: 22px; border-radius: 6px; cursor: pointer;
+      border: 1px solid rgba(120,160,140,.25); background: rgba(30,42,34,.9);
+      color: #cfe9d6; font-size: 15px; line-height: 1;
+    }
+    .panel-add:hover { background: rgba(44,62,50,.96); }
+    .panel-empty { padding: 14px 12px; color: #5a6b60; font-size: 12px; }
+
+    /* Slide rows */
+    .slide-row { padding: 8px 10px; border-bottom: 1px solid rgba(120,160,140,.06); border-left: 2px solid transparent; }
+    .slide-row.selected { background: rgba(83,240,255,.07); border-left-color: #53f0ff; }
+    .slide-row-top { display: flex; align-items: center; gap: 6px; }
+    .slide-badge {
+      flex: none; width: 22px; height: 22px; border-radius: 6px; cursor: pointer;
+      border: 1px solid rgba(120,160,140,.25); background: rgba(24,34,28,.9);
+      color: #cfe9d6; font: 11px/1 ui-monospace, monospace;
+    }
+    .slide-badge:hover { background: rgba(44,62,50,.96); }
+    .slide-title {
+      flex: 1; min-width: 0; background: transparent; color: #e8f0ea;
+      border: 1px solid transparent; border-radius: 5px; padding: 3px 5px;
+      font: 13px -apple-system, system-ui, sans-serif;
+    }
+    .slide-title:focus { outline: none; border-color: rgba(120,160,140,.4); background: rgba(0,0,0,.25); }
+    .slide-x {
+      flex: none; width: 20px; height: 20px; border-radius: 5px; cursor: pointer;
+      border: 1px solid transparent; background: transparent; color: #7d8c83; font-size: 12px;
+    }
+    .slide-x:hover { background: rgba(255,107,107,.18); color: #ff9b9b; }
+    .slide-controls { display: flex; gap: 4px; margin-top: 6px; align-items: center; }
+    .slide-transition {
+      flex: 1; min-width: 0; background: rgba(24,34,28,.9); color: #cfe9d6;
+      border: 1px solid rgba(120,160,140,.2); border-radius: 5px; font-size: 11px; padding: 2px 3px;
+    }
+    .slide-move {
+      flex: none; width: 22px; height: 22px; border-radius: 5px; cursor: pointer;
+      border: 1px solid rgba(120,160,140,.2); background: rgba(24,34,28,.9); color: #cfe9d6; font-size: 11px;
+    }
+    .slide-move:hover { background: rgba(44,62,50,.96); }
+
+    /* Inspector */
+    .inspector-sub {
+      padding: 10px 12px 4px; color: #8aa597;
+      font: 10px/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase;
+    }
+    .elem-row {
+      display: block; width: calc(100% - 16px); margin: 2px 8px; text-align: left;
+      padding: 5px 8px; border-radius: 6px; border: 1px solid transparent;
+      background: rgba(24,34,28,.5); color: #cfe9d6; cursor: pointer; font-size: 12px;
+    }
+    .elem-row:hover { background: rgba(44,62,50,.7); }
+    .elem-row.selected { border-color: #53f0ff; background: rgba(83,240,255,.09); }
+    .prop {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; padding: 5px 12px;
+    }
+    .prop span { color: #9fb0a6; font-size: 12px; }
+    .prop input, .prop select {
+      width: 122px; background: rgba(24,34,28,.9); border: 1px solid rgba(120,160,140,.2);
+      border-radius: 5px; color: #e8f0ea; padding: 3px 6px; font-size: 12px;
+    }
+    .prop input[type=color] { padding: 1px; height: 24px; width: 122px; }
+    .prop input:focus, .prop select:focus { outline: none; border-color: rgba(83,240,255,.5); }
+
+    /* Timeline */
+    #studio-timeline { display: flex; flex-direction: column; }
+    .tl-tracks { flex: 1; overflow: auto; padding: 4px 0; }
+    .tl-row { display: flex; align-items: center; height: 30px; gap: 8px; padding: 0 10px; }
+    .tl-label {
+      width: 90px; flex: none; color: #cfe9d6; font-size: 12px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .tl-lane {
+      position: relative; flex: 1; height: 22px; min-width: 280px;
+      background: rgba(255,255,255,.03); border-radius: 4px;
+    }
+    .tl-step {
+      position: absolute; top: 1px; height: 20px; line-height: 19px; padding: 0 6px;
+      border-radius: 4px; background: rgba(83,240,255,.22); border: 1px solid rgba(83,240,255,.5);
+      color: #dffbff; font-size: 11px; cursor: pointer; overflow: hidden; white-space: nowrap;
+      box-sizing: border-box;
+    }
+    .tl-step.selected { background: rgba(83,240,255,.45); border-color: #9af3ff; }
+    .tl-add {
+      flex: none; width: 22px; height: 22px; border-radius: 5px; cursor: pointer;
+      border: 1px solid rgba(120,160,140,.25); background: rgba(30,42,34,.9); color: #cfe9d6;
+    }
+    .tl-add:hover { background: rgba(44,62,50,.96); }
+    .tl-editor {
+      border-top: 1px solid rgba(120,160,140,.1); display: flex; flex-wrap: wrap;
+      align-items: center; gap: 2px 14px; padding: 6px 10px;
+    }
+    .tl-editor .prop { padding: 2px 0; gap: 6px; }
+    .tl-editor .prop input, .tl-editor .slide-transition { width: 88px; }
+    .tl-del {
+      margin-left: auto; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+      border: 1px solid rgba(255,107,107,.3); background: rgba(255,107,107,.12); color: #ff9b9b; font-size: 12px;
+    }
+    .tl-del:hover { background: rgba(255,107,107,.22); }
+
+    /* Selection indicator drawn over the selected element: four rounded L-shaped
+       corner brackets framing the bounds (not a full-perimeter border). The Swift
+       side sizes one div to the element bounds; content-box + equal margin/padding
+       insets the frame a few px outward (breathing room), a rounded full border
+       draws the elbows, and a 4-corner mask reveals only the corners — so one div
+       yields four rounded brackets with no extra markup. */
+    .stage-selection {
+      position: absolute;
+      box-sizing: content-box;
+      margin: -6px;              /* pull the padded box back so content aligns to bounds */
+      padding: 6px;              /* … so the brackets sit ~6px outside the element */
+      border: 2px solid #53f0ff;
+      border-radius: 7px;        /* rounded elbows */
+      --corner: 16px;            /* how far each bracket arm reaches from the corner */
+      -webkit-mask:
+        linear-gradient(#000, #000) left  top    / var(--corner) var(--corner) no-repeat,
+        linear-gradient(#000, #000) right top    / var(--corner) var(--corner) no-repeat,
+        linear-gradient(#000, #000) left  bottom / var(--corner) var(--corner) no-repeat,
+        linear-gradient(#000, #000) right bottom / var(--corner) var(--corner) no-repeat;
+      mask:
+        linear-gradient(#000, #000) left  top    / var(--corner) var(--corner) no-repeat,
+        linear-gradient(#000, #000) right top    / var(--corner) var(--corner) no-repeat,
+        linear-gradient(#000, #000) left  bottom / var(--corner) var(--corner) no-repeat,
+        linear-gradient(#000, #000) right bottom / var(--corner) var(--corner) no-repeat;
+      filter: drop-shadow(0 0 1px rgba(4, 33, 31, 0.55));  /* legibility on light elements */
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* Hold-⌥ element-id tags, one per current-slide element (at its top-left). */
+    .stage-id-label {
+      position: absolute;
+      z-index: 4;
+      padding: 0 5px;
+      border-radius: 4px;
+      background: rgba(83, 240, 255, 0.92);
+      color: #04211f;
+      font: 10px/1.6 ui-monospace, monospace;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    /* ⌥-drag alignment guides: thin lines (sized inline in Swift) marking where the
+       dragged element snapped. Element-to-element lines are magenta; screen-centre
+       lines are amber, so the two snap kinds read apart at a glance. */
+    .stage-guide {
+      position: absolute;
+      z-index: 3;
+      background: #ff48c4;
+      box-shadow: 0 0 2px rgba(255, 72, 196, 0.8);
+      pointer-events: none;
+    }
+    .stage-guide-screen {
+      background: #ffc24a;
+      box-shadow: 0 0 2px rgba(255, 194, 74, 0.85);
+    }
+
+    /* ⌥-click overlap picker: a transparent full-stage scrim catching the
+       outside-click to dismiss, with a tight ring of chips around the click point
+       (a center hub marks it). Each chip shows just `#id` on a fill of the element's
+       own colour (set inline); the neutral light ring reads on any fill. */
+    /* The picker blooms open: chips grow out from the hub (the click point), the hub
+       scales in, and the scrim dim fades up. --fromx/--fromy (set per chip in Swift)
+       start each chip translated back onto the hub; `backwards` fill releases the
+       transform after the run so :hover scaling still works. Re-runs on every show and
+       on the "+N" expand (renderRadial recreates the chips, restarting the animation). */
+    @keyframes stage-radial-scrim-in {
+      from { background-color: rgba(8, 12, 10, 0); }
+      to   { background-color: rgba(8, 12, 10, 0.34); }
+    }
+    @keyframes stage-radial-hub-in {
+      from { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+      to   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+    @keyframes stage-radial-bloom {
+      from { transform: translate(-50%, -50%) translate(var(--fromx, 0), var(--fromy, 0)) scale(0.3); opacity: 0; }
+      to   { transform: translate(-50%, -50%) translate(0, 0) scale(1); opacity: 1; }
+    }
+    .stage-radial-scrim {
+      position: absolute; inset: 0; z-index: 20;
+      background: rgba(8, 12, 10, 0.34);   /* dim the canvas so the picker reads as a focused menu */
+      backdrop-filter: blur(1px);
+      animation: stage-radial-scrim-in 140ms ease-out;
+    }
+    .stage-radial-hub {
+      position: absolute; width: 10px; height: 10px; border-radius: 50%;
+      background: #53f0ff; box-shadow: 0 0 0 5px rgba(83, 240, 255, 0.18);
+      transform: translate(-50%, -50%); pointer-events: none;
+      animation: stage-radial-hub-in 150ms ease-out backwards;
+    }
+    .stage-radial-item {
+      position: absolute; transform: translate(-50%, -50%);
+      margin: 0; padding: 4px 9px; border-radius: 999px;
+      border: 1.5px solid rgba(255, 255, 255, 0.6);
+      color: #eef4ee; font: 12px/1 ui-monospace, monospace;
+      white-space: nowrap; cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+      animation: stage-radial-bloom 190ms cubic-bezier(.2, .9, .25, 1.15) backwards;
+      animation-delay: calc(var(--slot, 0) * 16ms);   /* stagger the sweep by ring order */
+    }
+    .stage-radial-item:hover { transform: translate(-50%, -50%) scale(1.1); border-color: #fff; }
+    /* "+N" overflow chip (no element colour) — neutral fill, blooms the ring on hover. */
+    .stage-radial-more { background: rgba(38, 50, 44, 0.97); color: #cfe9d6; letter-spacing: 1px; }
+
+    /* Inline editor opened by double-clicking a text / math element. Position,
+       size, font-size and colour are set inline (per element); this is the chrome. */
+    .stage-text-editor {
+      position: absolute;
+      z-index: 5;
+      margin: 0;
+      padding: 2px 5px;
+      border: 1.5px solid #53f0ff;
+      border-radius: 4px;
+      background: #0c120e;
+      box-shadow: 0 0 0 1px rgba(83, 240, 255, 0.25), 0 6px 22px rgba(0, 0, 0, 0.55);
+      color: #e8f0ea;
+      font-family: -apple-system, system-ui, sans-serif;
+      line-height: 1.15;
+      text-align: center;
+      resize: none;
+      overflow: hidden;
+      outline: none;
+    }
+
+    /* Stage overlays */
+    #story-hud {
+      position: absolute; top: 14px; left: 16px; padding: 6px 12px; border-radius: 8px;
+      background: rgba(18, 26, 20, 0.7); font: 13px/1.4 ui-monospace, monospace;
+      letter-spacing: 0.02em; color: #cfe9d6; pointer-events: none; z-index: 2;
+    }
+    #story-caption {
+      position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
+      max-width: min(82%, 720px); padding: 10px 18px; border-radius: 10px;
+      background: rgba(10, 16, 12, 0.72); color: #eef4ee;
+      font: 17px/1.5 -apple-system, system-ui, sans-serif; text-align: center;
+      pointer-events: none; opacity: 0; transition: opacity 0.25s ease; z-index: 2;
+    }
+    #story-caption.show { opacity: 1; }
+    #story-actions { position: absolute; bottom: 16px; left: 16px; display: flex; gap: 8px; z-index: 2; }
+    #story-actions button {
+      padding: 7px 14px; border: 1px solid #3a544299; border-radius: 8px;
+      background: rgba(24, 36, 28, 0.85); color: #cfe9d6; cursor: pointer; font: inherit;
+    }
+    #story-actions button:hover { background: rgba(36, 54, 42, 0.95); }
+
+    /* Debug overlay labels (Shift / Option+Shift) */
+    .overlay-label {
+      position: absolute; z-index: 4; transform: translate(-50%, -50%);
+      padding: 1px 5px; border-radius: 4px; background: rgba(83, 240, 255, 0.85);
+      color: #04211f; font: 11px/1.5 ui-monospace, monospace; pointer-events: none; white-space: nowrap;
+    }
+    .overlay-label-drag        { background: rgba(255, 170, 64, 0.92);  color: #221604; }
+    .overlay-label-drop        { background: rgba(120, 230, 130, 0.92); color: #06210a; }
+    .overlay-label-tap         { background: rgba(200, 150, 255, 0.92); color: #1a0a2a; }
+    .overlay-label-doubleClick { background: rgba(255, 130, 190, 0.92); color: #2a0617; }
+    .overlay-label-hover       { background: rgba(120, 220, 240, 0.92); color: #04222a; }
+    .overlay-drop-area {
+      position: absolute; z-index: 3; box-sizing: border-box;
+      border: 1.5px dashed rgba(120, 230, 130, 0.9); background: rgba(120, 230, 130, 0.12);
+      border-radius: 6px; pointer-events: none;
+    }
+
+    /* Hold-H help sheet (modal overlay) */
+    #help-sheet {
+      position: fixed; inset: 0; z-index: 50; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(6, 10, 8, 0.6); backdrop-filter: blur(3px);
+    }
+    #help-sheet.show { display: flex; }
+    .help-card {
+      width: min(520px, 90vw); max-height: 84vh; overflow: auto;
+      background: rgba(18, 26, 20, 0.97); border: 1px solid rgba(120, 160, 140, 0.25);
+      border-radius: 14px; padding: 18px 24px 22px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+    }
+    .help-card h2 { margin: 0 0 3px; font-size: 15px; color: #e8f0ea; }
+    .help-hint { margin: 0; font-size: 12px; color: #8aa597; }
+    .help-hint kbd { color: #cfe9d6; }
+    .help-sec {
+      margin: 14px 0 2px; color: #8aa597;
+      font: 10px/1 ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase;
+    }
+    .help-row { display: flex; align-items: baseline; gap: 12px; padding: 3px 0; }
+    .help-row kbd {
+      flex: none; min-width: 128px; color: #cfe9d6; font: 12px/1.5 ui-monospace, monospace;
+    }
+    .help-row span { color: #b9c8be; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="studio">
+    <aside id="studio-slides" class="panel"></aside>
+    <main id="scene-host">
+      <canvas id="main"></canvas>
+      <div id="studio-toolbar"></div>
+      <div id="story-hud">loading…</div>
+      <div id="story-caption"></div>
+      <div id="story-actions"></div>
+    </main>
+    <aside id="studio-inspector" class="panel">
+      <div class="panel-head"><span>Inspector</span></div>
+      <div class="panel-empty">Select an element to edit its properties.</div>
+    </aside>
+    <section id="studio-timeline" class="panel">
+      <div class="panel-head"><span>Timeline</span></div>
+      <div class="panel-empty">Animation steps appear here.</div>
+    </section>
+  </div>
+  <!-- Scroll spacers the StoryRuntime fills; hidden because the editor navigates
+       via the slide rail and arrow keys, not page scroll. -->
+  <div id="story-track" hidden></div>
+
+  <!-- Held-H help sheet (StudioApp toggles `.show` on H down/up). -->
+  <div id="help-sheet">
+    <div class="help-card">
+      <h2>Story Studio · Shortcuts</h2>
+      <p class="help-hint">Hold <kbd>H</kbd> for this sheet — release to dismiss.</p>
+
+      <div class="help-sec">Canvas</div>
+      <div class="help-row"><kbd>Drag</kbd><span>Move the selected element(s)</span></div>
+      <div class="help-row"><kbd>Shift+Drag</kbd><span>Move selection from anywhere (even buried)</span></div>
+      <div class="help-row"><kbd>⌘ Click</kbd><span>Add / remove from selection</span></div>
+      <div class="help-row"><kbd>Double-click</kbd><span>Edit text · empty space adds text</span></div>
+      <div class="help-row"><kbd>Hold ⌥</kbd><span>Show element IDs</span></div>
+      <div class="help-row"><kbd>⌥ Click</kbd><span>Pick from overlapping elements (radial menu)</span></div>
+      <div class="help-row"><kbd>Delete</kbd><span>Delete selected element(s)</span></div>
+
+      <div class="help-sec">Inline editor</div>
+      <div class="help-row"><kbd>Enter</kbd><span>Commit edit</span></div>
+      <div class="help-row"><kbd>Shift+Enter</kbd><span>New line</span></div>
+      <div class="help-row"><kbd>Esc</kbd><span>Cancel edit</span></div>
+
+      <div class="help-sec">View &amp; history</div>
+      <div class="help-row"><kbd>⌘ + / ⌘ −</kbd><span>Zoom camera in / out</span></div>
+      <div class="help-row"><kbd>⌘ 0</kbd><span>Reset zoom</span></div>
+      <div class="help-row"><kbd>⌘ Z / ⌘⇧ Z</kbd><span>Undo / Redo</span></div>
+      <div class="help-row"><kbd>⌘ S</kbd><span>Export JSON</span></div>
+
+      <div class="help-sec">Playback</div>
+      <div class="help-row"><kbd>Space</kbd><span>Play / pause</span></div>
+      <div class="help-row"><kbd>↑ / ↓</kbd><span>Previous / next slide</span></div>
+      <div class="help-row"><kbd>⌘ ↑ / ⌘ ↓</kbd><span>Animate to first / last slide</span></div>
+      <div class="help-row"><kbd>← / →</kbd><span>Previous / next step</span></div>
+    </div>
+  </div>
+  <script type="module">
+    import { init } from "./js-studio/index.js";
+    await init({ getImports() { return {}; } });
+  </script>
+</body>
+</html>

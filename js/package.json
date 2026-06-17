@@ -5,7 +5,7 @@
     "private": true,
     "exports": {
         ".": "./index.js",
-        "./wasm": "./PhysicsEngine.wasm"
+        "./wasm": "./PhysicaDemo.wasm"
     },
     "dependencies": {
         "@bjorn3/browser_wasi_shim": "0.3.0"

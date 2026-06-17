@@ -1,7 +1,7 @@
 // @ts-check
 import { SwiftRuntime } from "./runtime.js";
 
-export const MODULE_PATH = "PhysicsEngine.wasm";
+export const MODULE_PATH = "PhysicaDemo.wasm";
 export const MEMORY_TYPE = {
     // @ts-expect-error Substituted by PackageToJS preprocessor
     initial: 24,

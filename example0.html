@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Physica · Example0 — Wave Interference</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html { scroll-snap-type: y proximity; }
+    body {
+      margin: 0;
+      background: #0c120e;
+      color: #e8e8ec;
+      font: 14px/1.4 -apple-system, system-ui, sans-serif;
+    }
+    #story { position: relative; }
+    #story-pin {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .scene-host { position: relative; flex: 1; overflow: hidden; }   /* anchor + clip for overlay labels */
+    canvas#main {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #0c120e;
+      touch-action: pan-y;   /* scroll-scrub over the canvas; flipped to none while grabbing */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;   /* no long-press callout interrupting a touch/pen drag */
+    }
+    #story-hud {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(18, 26, 20, 0.7);
+      font: 13px/1.4 ui-monospace, monospace;
+      letter-spacing: 0.02em;
+      color: #cfe9d6;
+      pointer-events: none;
+    }
+    #story-caption {
+      position: absolute;
+      left: 50%;
+      bottom: 64px;
+      transform: translateX(-50%);
+      max-width: min(82%, 720px);
+      padding: 10px 18px;
+      border-radius: 10px;
+      background: rgba(10, 16, 12, 0.72);
+      color: #eef4ee;
+      font: 17px/1.5 -apple-system, system-ui, sans-serif;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;                       /* hidden until a caption is active */
+      transition: opacity 0.25s ease;
+    }
+    #story-caption.show { opacity: 1; }
+    #story-actions {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      display: flex;
+      gap: 8px;
+    }
+    #story-actions button {
+      padding: 7px 14px;
+      border: 1px solid #3a544299;
+      border-radius: 8px;
+      background: rgba(24, 36, 28, 0.85);
+      color: #cfe9d6;
+      cursor: pointer;
+      font: inherit;
+    }
+    #story-actions button:hover { background: rgba(36, 54, 42, 0.95); }
+    .overlay-label {
+      position: absolute;
+      z-index: 2;
+      transform: translate(-50%, -50%);
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(83, 240, 255, 0.85);
+      color: #04211f;
+      font: 11px/1.5 ui-monospace, monospace;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    /* Option+Shift overlay — draggable/touchable entities, colored by kind */
+    .overlay-label-drag        { background: rgba(255, 170, 64, 0.92);  color: #221604; }
+    .overlay-label-drop        { background: rgba(120, 230, 130, 0.92); color: #06210a; }
+    .overlay-label-tap         { background: rgba(200, 150, 255, 0.92); color: #1a0a2a; }
+    .overlay-label-doubleClick { background: rgba(255, 130, 190, 0.92); color: #2a0617; }
+    .overlay-label-hover       { background: rgba(120, 220, 240, 0.92); color: #04222a; }
+    /* Option+Shift drop-target hit regions — outlined under the number labels */
+    .overlay-drop-area {
+      position: absolute;
+      z-index: 1;
+      box-sizing: border-box;
+      border: 1.5px dashed rgba(120, 230, 130, 0.9);
+      background: rgba(120, 230, 130, 0.12);
+      border-radius: 6px;
+      pointer-events: none;
+    }
+    .story-hint {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      color: #5a6b60;
+      font-size: 12px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="story">
+    <div id="story-pin">
+      <div class="scene-host" id="scene-host">
+        <canvas id="main"></canvas>
+      </div>
+      <div id="story-hud">loading…</div>
+      <div id="story-caption"></div>
+      <div id="story-actions"></div>
+    </div>
+    <div id="story-track"></div>
+  </div>
+  <p class="story-hint">Scroll to scrub · Space play/pause · ↑/↓ slides · ←/→ steps · Shift for indices</p>
+  <script type="module">
+    import { init } from "./js-example0/index.js";
+    await init({ getImports() { return {}; } });
+  </script>
+</body>
+</html>

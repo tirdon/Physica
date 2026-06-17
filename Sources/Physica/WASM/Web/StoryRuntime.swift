@@ -18,10 +18,20 @@ import JavaScriptKit
 
 @MainActor
 public final class StoryRuntime {
-    public let engine: Engine
-    public let player: StoryPlayer
-    private let story: Story
-    private let scene: Scene
+    public private(set) var engine: Engine
+    public private(set) var player: StoryPlayer
+    private var story: Story
+    /// The live scene currently bound to the renderer (swapped by `reload`).
+    /// Exposed so an editor host can hit-test / project against it.
+    public private(set) var scene: Scene
+
+    /// When false, Shift / Option+Shift no longer drive the index overlays. Editor
+    /// hosts (Story Studio) repurpose Shift for multi-select and turn this off so
+    /// the debug labels don't flash over the stage. Forwarded to `InputBindings`,
+    /// which owns the other Shift key listener.
+    public var syncsDebugOverlay = true {
+        didSet { inputBindings?.syncsDebugOverlay = syncsDebugOverlay }
+    }
 
     private(set) var renderer: WebGPURenderer?
     private var rafDriver: RAFDriver?
@@ -39,6 +49,10 @@ public final class StoryRuntime {
     private var spacerTops: [Double] = []
     private var spacerHeights: [Double] = []
     private var totalPixels: Double = 0
+
+    /// DOM host ids, stored so `reload` can rebuild the spacers/actions in place.
+    private var trackID = "story-track"
+    private var actionsID = "story-actions"
 
     /// Horizontal-swipe recognizer for touch step navigation, and whether the
     /// in-flight touch gesture is being tracked as a candidate swipe.
@@ -80,6 +94,8 @@ public final class StoryRuntime {
             return runtime
         }
 
+        runtime.trackID = trackID
+        runtime.actionsID = actionsID
         runtime.buildSpacers(trackID: trackID)
         runtime.buildActions(actionsID: actionsID)
         runtime.hud = document.getElementById(hudID)
@@ -109,6 +125,43 @@ public final class StoryRuntime {
         }
         runtime.syncHUD()
         return runtime
+    }
+
+    /// Swaps in a freshly compiled story without tearing down the renderer, rAF
+    /// loop, or input/overlay listeners. The editor recompiles on every edit, so
+    /// rebuilding the page each time would leak rAF loops and DOM listeners;
+    /// instead we rebind the live renderer to the new scene (a fresh engine per
+    /// compile means a single clean binding) and rebuild only the spacers/actions.
+    public func reload(engine: Engine, story: Story) {
+        self.engine = engine
+        self.story = story
+        self.scene = story.scene
+        self.player = StoryPlayer(story: story)
+
+        clearChildren(of: trackID)
+        clearChildren(of: actionsID)
+        spacerTops.removeAll()
+        spacerHeights.removeAll()
+        totalPixels = 0
+        buildSpacers(trackID: trackID)
+        buildActions(actionsID: actionsID)
+
+        if let renderer {
+            engine.bind(renderer, to: scene)
+        }
+
+        pendingScrollY = nil
+        lastMirroredScrollY = nil
+        lastSlide = -1
+        lastCaption = ""
+        syncHUD()
+    }
+
+    private func clearChildren(of id: String) {
+        guard let document = JSObject.global.document.object else { return }
+        var node = document.getElementById!(id)
+        guard node.object != nil else { return }
+        node.innerHTML = .string("")
     }
 
     // MARK: Per-frame
@@ -240,9 +293,15 @@ public final class StoryRuntime {
     }
 
     private func handleKey(_ event: JSValue) {
+        // ⌘/Ctrl + ↑/↓ jumps (animated) to the first / last slide; bare ↑/↓ step one.
+        let jump = (event.metaKey.boolean ?? false) || (event.ctrlKey.boolean ?? false)
         switch event.key.string ?? "" {
-        case "ArrowDown": _ = event.preventDefault(); player.nextSlide()
-        case "ArrowUp": _ = event.preventDefault(); player.previousSlide()
+        case "ArrowDown":
+            _ = event.preventDefault()
+            if jump { player.lastSlide() } else { player.nextSlide() }
+        case "ArrowUp":
+            _ = event.preventDefault()
+            if jump { player.firstSlide() } else { player.previousSlide() }
         case "ArrowRight": _ = event.preventDefault(); player.nextStep()
         case "ArrowLeft": _ = event.preventDefault(); player.previousStep()
         case " ", "Spacebar": _ = event.preventDefault(); player.toggleAutoplay()  // play/pause
@@ -255,6 +314,7 @@ public final class StoryRuntime {
     /// touchable) overlay. Recomputed from the live modifier flags so the modes
     /// hand off as Option is pressed or released under Shift.
     private func syncOverlayModifiers(_ event: JSValue, isUp: Bool) {
+        guard syncsDebugOverlay else { return }   // editor hosts own Shift (multi-select)
         let shift = event.shiftKey.boolean ?? false
         let alt = event.altKey.boolean ?? false
         engine.isInteractiveOverlayActive = shift && alt

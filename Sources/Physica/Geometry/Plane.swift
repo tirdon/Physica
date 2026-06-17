@@ -249,11 +249,20 @@ public final class Plane: Group {
         (x - dataCenter.x) * unitScale.x
     }
 
-    /// Clamps a sampled value into the y range (graphs never leave the board);
-    /// non-finite samples pin to the top edge.
+    /// Clamps a value into the y range — sits the x-axis on zero when zero is
+    /// in range, else hugs the nearest edge. (Graphs no longer clamp: `plotY`
+    /// keeps the raw sample and the rendered path is clipped to the board.)
     func clampedY(_ value: Real) -> Real {
         guard value.isFinite else { return yRange.upperBound }
         return Swift.min(Swift.max(value, yRange.lowerBound), yRange.upperBound)
+    }
+
+    /// Sample value for plotting: finite values pass through unclamped so the
+    /// curve keeps its true shape (the rendered path is clipped to the board,
+    /// so it stops at the edge rather than flattening into a "shoulder");
+    /// non-finite samples pin to the top edge to keep morphs lerp-safe.
+    func plotY(_ value: Real) -> Real {
+        value.isFinite ? value : yRange.upperBound
     }
 
     // MARK: Ticks

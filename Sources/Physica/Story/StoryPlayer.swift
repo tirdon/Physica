@@ -189,6 +189,25 @@ public final class StoryPlayer {
         apply(time: start, force: true)
     }
 
+    /// Tween in one animated jump to the last slide's fully-built end (⌘+Down) —
+    /// forward navigation like `nextSlide`, but straight to the final rest, so the
+    /// camera transitions of every slide between here and the end play during the
+    /// tween. No-op when already at (or past) the last beat.
+    public func lastSlide() {
+        guard let beat = beats.last else { return }
+        guard beat.time > scene.timeline.currentTime + Self.seekEpsilon else { return }
+        beginTween(to: beat)
+    }
+
+    /// Tween back to the first slide's landed rest — the "top" (⌘+Up). Unlike
+    /// `previousSlide`'s instant step, this *animates* the rewind: the timeline
+    /// reverse-plays to the first beat. No-op when already at it.
+    public func firstSlide() {
+        guard let beat = beats.first else { return }
+        guard beat.time < scene.timeline.currentTime - Self.seekEpsilon else { return }
+        beginTween(to: beat)
+    }
+
     /// Instant seek to a slide's first rest (its start for a normal slide, its
     /// landed state for a content-entrance slide).
     public func seek(toSlide index: Int) {
@@ -373,8 +392,8 @@ public final class StoryPlayer {
         nextStreamID += 1
         return AsyncStream(bufferingPolicy: .unbounded) { continuation in
             continuations[id] = continuation
-            continuation.onTermination = { _ in
-                Task { @MainActor [weak self] in
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in
                     self?.continuations[id] = nil
                 }
             }

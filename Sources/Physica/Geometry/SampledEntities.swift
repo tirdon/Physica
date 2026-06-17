@@ -13,7 +13,14 @@ open class SampledPathEntity: PathEntity {
 
     func setLines(_ newLines: [[SIMD2<Real>]]) {
         lines = newLines
-        path = Self.polylinePath(newLines)
+        path = renderPath(from: newLines)
+    }
+
+    /// Builds the rendered path from the sample lines. Subclasses override to
+    /// clip or reshape the geometry while leaving the raw `lines` (the morph
+    /// data) untouched; the base mapping is one open contour per polyline.
+    func renderPath(from lines: [[SIMD2<Real>]]) -> Path {
+        Self.polylinePath(lines)
     }
 
     static func polylinePath(_ lines: [[SIMD2<Real>]]) -> Path {
@@ -47,6 +54,65 @@ public final class Graph: SampledPathEntity {
         name = "graph"
         transform = plane.worldTransform
         setLines(lines)
+    }
+
+    /// Clips the rendered curve to the board so an out-of-range stretch stops
+    /// at the edge instead of flattening into a "shoulder". The raw `lines`
+    /// keep the full samples, so re-plots stay topology-stable and lerp
+    /// pointwise.
+    override func renderPath(from lines: [[SIMD2<Real>]]) -> Path {
+        let lower = plane.localPoint(0, plane.yRange.lowerBound).y
+        let upper = plane.localPoint(0, plane.yRange.upperBound).y
+        let clipped = lines.flatMap { Self.clipToBand($0, lower: lower, upper: upper) }
+        return Self.polylinePath(clipped)
+    }
+
+    /// Splits a plane-local polyline into the sub-polylines lying within the
+    /// vertical band `lower...upper`, inserting exact crossing points where it
+    /// enters or leaves (so the curve meets the board edge precisely instead of
+    /// running flat along it). A curve that dips out and back in yields several
+    /// runs; one fully inside yields itself.
+    static func clipToBand(_ line: [SIMD2<Real>], lower: Real, upper: Real) -> [[SIMD2<Real>]] {
+        func inside(_ y: Real) -> Bool { y >= lower && y <= upper }
+        guard line.count >= 2 else {
+            if let p = line.first, inside(p.y) { return [[p]] }
+            return []
+        }
+        var runs: [[SIMD2<Real>]] = []
+        var run: [SIMD2<Real>] = []
+        func flush() {
+            if run.count >= 2 { runs.append(run) }
+            run = []
+        }
+        for index in 1..<line.count {
+            let p = line[index - 1]
+            let q = line[index]
+            let dy = q.y - p.y
+            // Parameter window [t0, t1] of the segment p→q that lies in band.
+            var t0: Real = 0
+            var t1: Real = 1
+            if Swift.abs(dy) < 1e-12 {
+                if !inside(p.y) { flush(); continue }  // horizontal & outside
+            } else {
+                let ta = (lower - p.y) / dy
+                let tb = (upper - p.y) / dy
+                t0 = Swift.max(0, Swift.min(ta, tb))
+                t1 = Swift.min(1, Swift.max(ta, tb))
+                if t0 > t1 { flush(); continue }       // segment misses the band
+            }
+            let a = SIMD2<Real>.lerp(p, q, t0)
+            let b = SIMD2<Real>.lerp(p, q, t1)
+            if run.isEmpty {
+                run.append(a)
+            } else if t0 > 0 {
+                flush()                                // re-entered after leaving
+                run.append(a)
+            }
+            run.append(b)
+            if t1 < 1 { flush() }                      // left before the segment end
+        }
+        flush()
+        return runs
     }
 }
 
@@ -164,9 +230,9 @@ public final class Streamlines: SampledPathEntity {
 // MARK: - Plane factories
 
 public extension Plane {
-    /// Function graph `y = f(x)` sampled uniformly across the x range
-    /// (values clamp to the y range). Reveal it like any shape; re-plot with
-    /// `graph.plot { ... }`.
+    /// Function graph `y = f(x)` sampled uniformly across the x range (the
+    /// curve is clipped to the board, so out-of-range stretches stop at the
+    /// edge). Reveal it like any shape; re-plot with `graph.plot { ... }`.
     @discardableResult
     func graph(
         of function: (Real) -> Real,
@@ -179,7 +245,7 @@ public extension Plane {
             xRange.lowerBound
                 + (xRange.upperBound - xRange.lowerBound) * Real(index) / Real(count - 1)
         }
-        let points = xs.map { localPoint($0, clampedY(function($0))) }
+        let points = xs.map { localPoint($0, plotY(function($0))) }
         return Graph(plane: self, sampleXs: xs, lines: [points], color: color, width: width)
     }
 
@@ -190,7 +256,7 @@ public extension Plane {
         color: Color = .yellow,
         width: Real = 0.025
     ) -> Graph {
-        let line = points.map { localPoint($0.x, clampedY($0.y)) }
+        let line = points.map { localPoint($0.x, plotY($0.y)) }
         return Graph(
             plane: self, sampleXs: points.map(\.x), lines: [line], color: color, width: width
         )
@@ -295,7 +361,7 @@ public extension Graph {
     /// animatable like any property: `scene.play(graph.plot { x in .cos(x) })`.
     @discardableResult
     func plot(_ function: (Real) -> Real) -> Animation {
-        let points = sampleXs.map { plane.localPoint($0, plane.clampedY(function($0))) }
+        let points = sampleXs.map { plane.localPoint($0, plane.plotY(function($0))) }
         return Animation(pairs: [AnimationPair(
             target: self, blueprint: PolylineMorphBlueprint(lines: [points], verb: "plot(fn)")
         )])
@@ -304,7 +370,7 @@ public extension Graph {
     /// Morphs to a new data series (sample counts may differ — resampled).
     @discardableResult
     func plot(_ points: [SIMD2<Real>]) -> Animation {
-        let line = points.map { plane.localPoint($0.x, plane.clampedY($0.y)) }
+        let line = points.map { plane.localPoint($0.x, plane.plotY($0.y)) }
         return Animation(pairs: [AnimationPair(
             target: self, blueprint: PolylineMorphBlueprint(lines: [line], verb: "plot(data)")
         )])

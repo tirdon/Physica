@@ -188,6 +188,62 @@ import Testing
         #expect(player.currentSlideIndex == 0)
     }
 
+    /// Three slides, each: add a circle + a 1s move, none carried → each auto-clears
+    /// into the next (boundaries 0,1 / 1,2 / 2,3; total 3s). For ⌘+Up/Down jumps
+    /// across more than one slide.
+    private func makeThreeSlideStory() -> (Scene, Story) {
+        let scene = Scene()
+        let story = Story(scene: scene)
+        for i in 0..<3 {
+            let c = Circle(radius: 0.3)
+            story.slide("s\(i)") { s in
+                s.add(c)
+                s.play(c.move(to: Position(Real(i + 1), 0, 0)), for: 1.s)
+            }
+        }
+        return (scene, story)
+    }
+
+    /// ⌘+Down: one animated jump from the first slide straight to the last slide's
+    /// fully-built end, tweening through (not skipping) the slide between.
+    @Test func lastSlideTweensToFinalSlide() {
+        let (scene, story) = makeThreeSlideStory()
+        let player = StoryPlayer(story: story)
+        #expect(player.currentSlideIndex == 0)
+        player.lastSlide()
+        #expect(player.isTweening)                                   // animated, not instant
+        runTweens(player)
+        #expect(player.currentSlideIndex == story.slides.count - 1)
+        #expect(abs(scene.timeline.currentTime - scene.timeline.duration) < tolerance)
+    }
+
+    /// ⌘+Up: an animated rewind from the last slide back to the top (slide 0),
+    /// unlike `previousSlide`'s instant single-step back.
+    @Test func firstSlideTweensBackToTop() {
+        let (scene, story) = makeThreeSlideStory()
+        let player = StoryPlayer(story: story)
+        player.scrub(globalProgress: 1)                             // jump to the very end
+        #expect(player.currentSlideIndex == story.slides.count - 1)
+        player.firstSlide()
+        #expect(player.isTweening)                                  // animates the rewind
+        runTweens(player)
+        #expect(player.currentSlideIndex == 0)
+        #expect(abs(scene.timeline.currentTime - 0) < tolerance)   // slide 0's first rest
+    }
+
+    /// Both jumps no-op when already at the destination (no stranded tween).
+    @Test func firstAndLastSlideNoOpAtEnds() {
+        let (_, story) = makeThreeSlideStory()
+        let player = StoryPlayer(story: story)
+        player.firstSlide()                                         // already at the top
+        #expect(!player.isTweening)
+        #expect(player.currentSlideIndex == 0)
+        player.lastSlide(); runTweens(player)
+        #expect(player.currentSlideIndex == story.slides.count - 1)
+        player.lastSlide()                                         // already at the end
+        #expect(!player.isTweening)
+    }
+
     @Test func backwardScrubRewindsLaterSlideEntities() {
         let (scene, story, a, b) = makeStory()
         let player = StoryPlayer(story: story)

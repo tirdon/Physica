@@ -14,6 +14,28 @@ public enum FontLoader {
     public static let defaultURL =
         "https://cdn.jsdelivr.net/npm/@expo-google-fonts/roboto@0.2.3/Roboto_400Regular.ttf"
 
+    /// Computer Modern Unicode Serif (`cmunrm`) — LaTeX's body face, as a glyf
+    /// TrueType the pure-Swift `Font` parser handles. Pinned to a commit so the
+    /// bytes are reproducible under COEP. Pairs with the dvisvgm math path so
+    /// host-baked formulas and runtime text share the same face.
+    public static let computerModernURL =
+        "https://cdn.jsdelivr.net/gh/dreampulse/computer-modern-web-font@e9977be1283466992a2dede47a342655d8426fee/font/Serif/cmunrm.ttf"
+
+    /// Computer Modern Unicode Typewriter (`cmuntt`) — the monospace face for
+    /// code listings. Same family as ``computerModernURL``, fixed-width glyphs.
+    public static let monoURL =
+        "https://cdn.jsdelivr.net/gh/dreampulse/computer-modern-web-font@e9977be1283466992a2dede47a342655d8426fee/font/Typewriter/cmuntt.ttf"
+
+    /// Computer Modern Serif — `load(url: computerModernURL)`.
+    public static func loadComputerModern() async throws -> Font {
+        try await load(url: computerModernURL)
+    }
+
+    /// Computer Modern Typewriter (monospace, for code) — `load(url: monoURL)`.
+    public static func loadMono() async throws -> Font {
+        try await load(url: monoURL)
+    }
+
     public static func load(url: String = defaultURL) async throws -> Font {
         let global = JSObject.global
         let response = try await JSPromise(unsafelyWrapping: global.fetch!(url).object!).value()
