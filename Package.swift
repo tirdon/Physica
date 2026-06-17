@@ -38,24 +38,24 @@ let package = Package(
 		// Examples — each a standalone wasm executable under Sources/PhysicaDemo/.
         .executableTarget(
             name: "Example1",
-			path: "Sources/PhysicaDemo/Example1",
 			dependencies: [
 				.product(name: "JavaScriptKit", package: "JavaScriptKit"),
 				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
 				.target(name: "Physica")
 				],
+			path: "Sources/PhysicaDemo/Example1",
 			plugins: [
 				.plugin(name: "BridgeJS", package: "JavaScriptKit")
 			]
         ),
         .executableTarget(
             name: "Example0",
-			path: "Sources/PhysicaDemo/Example0",
 			dependencies: [
 				.product(name: "JavaScriptKit", package: "JavaScriptKit"),
 				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
 				.target(name: "Physica")
-				]
+				],
+			path: "Sources/PhysicaDemo/Example0"
         ),
 
 			// Story Studio — a standalone wasm WYSIWYG storytelling-authoring app
