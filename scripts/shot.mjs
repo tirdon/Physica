@@ -1,11 +1,11 @@
-// Headless-WebGPU screenshots of story.html — the renderer/web verification drill
+// Headless-WebGPU screenshots of example2.html — the renderer/web verification drill
 // from CLAUDE.md. Launches system Chrome with ANGLE-metal + unsafe-webgpu against
 // the running bun server, drives the story with arrow keys, and writes a PNG per
 // slide so the layout can be eyeballed. Run: `bun bunserver.js` then `bun scripts/shot.mjs`.
 import puppeteer from "puppeteer-core";
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const URL = "http://localhost:3000/story.html";
+const URL = "http://localhost:3000/example2.html";
 const OUT = "/tmp/physica-shots";
 import { mkdirSync } from "node:fs";
 mkdirSync(OUT, { recursive: true });

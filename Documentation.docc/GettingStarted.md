@@ -25,8 +25,8 @@ loop is `swift test` — no GPU or wasm toolchain required.
 swift test
 swift test --filter TimelineTests          # one suite
 
-# WebAssembly bundle (Real == Float) → ./js
-swift package --swift-sdk 6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads --allow-writing-to-directory js js --use-cdn --output js --product Example1
+# WebAssembly bundle (Real == Float) → ./js-example1
+swift package --swift-sdk 6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads --allow-writing-to-directory js-example1 js --use-cdn --output js-example1 --product Example1
 
 # Serve with the COOP/COEP headers wasip1-threads needs
 bun bunserver.js          # → http://localhost:3000

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Physica — Story</title>
+  <title>Physica · Example2 — Equation Story</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -131,8 +131,7 @@
   </div>
   <p class="story-hint">Scroll to scrub · Space play/pause · ↑/↓ slides · ←/→ steps · Shift for indices · ⌥+Shift for draggable</p>
   <script type="module">
-    globalThis.physicaStory = true;
-    import { init } from "./js/index.js";
+    import { init } from "./js-example2/index.js";
     await init({ getImports() { return {}; } });
   </script>
 </body>

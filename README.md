@@ -5,7 +5,7 @@ Manim-style scripted animation API, rendered with WebGPU in the browser.
 
 - **ECS** — `Entity` + type-keyed `ComponentSet`, `System` protocol with `@MainActor update(context:)`, `EntityQuery`, `Group`/`Row`/`Column`/`Grid` layouts.
 - **Scripted animation** — `scene.add` / `scene.play` / `scene.wait` / `scene.pause(System.self)` enqueue clips on an append-only `Timeline`; every call and every entity animation method returns the same `Animation` currency type, so everything composes (including a result builder).
-- **Scrub-safe** — `seek(t)` replays/rewinds clips deterministically (entities appear/disappear at their `add` clip), pauses all systems, and re-runs updaters. The playback slider in `index.html` drives it.
+- **Scrub-safe** — `seek(t)` replays/rewinds clips deterministically (entities appear/disappear at their `add` clip), pauses all systems, and re-runs updaters. The playback slider in `example1.html` drives it.
 - **Updaters** — `entity.updater = { ... }` (Manim `add_updater` style) or type-safe `entity.bind(\.end, to: bob, \.position)`; both stored in `UpdaterComponent`, run after systems each frame and after every seek.
 - **Vector graphics** — `Path` (line/quad/cubic), `Circle`/`Rectangle`/`Triangle`/`Line`/`Arrow`/`Wall`, stencil-then-cover GPU fills (concave shapes and holes are exact), stroke reveal `draw()`, topology-matched `morph(to:)`.
 - **Text** — pure-Swift TrueType parser (`glyf`, cmap 4/12), `TextEntity("…", font:)` with `write()`: glyph-staggered stroke draw, then fill fade.
@@ -28,9 +28,9 @@ Manim-style scripted animation API, rendered with WebGPU in the browser.
 # Host tests (macOS, Real == Double)
 swift test
 
-# WebAssembly bundle (Real == Float) → ./js
+# WebAssembly bundle (Real == Float) → ./js-example1
 swift package --swift-sdk 6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads \
-  --allow-writing-to-directory js js --use-cdn --output js --product Example1
+  --allow-writing-to-directory js-example1 js --use-cdn --output js-example1 --product Example1
 
 # Serve with the COOP/COEP headers wasip1-threads needs
 bun bunserver.js          # → http://localhost:3000
@@ -121,9 +121,9 @@ entity.components[DropTargetComponent.self] = DropTargetComponent(
 )
 ```
 
-`Sources/PhysicaDemo/Example1/Demos/PendulumDemo.swift` runs the main demo script;
-`EquationStoryDemo.swift` is a full scroll-driven equation-solving story at
-`story.html`.
+`Sources/PhysicaDemo/Example1/Demos/PendulumDemo.swift` runs the pendulum demo script;
+`Sources/PhysicaDemo/Example2/EquationStoryDemo.swift` is a full scroll-driven
+equation-solving story at `example2.html`.
 
 ## Layout
 
@@ -156,8 +156,10 @@ Sources/Physica/            dependency-free core — builds & tests on macOS and
              PlaybackControls, DebugOverlay, FontLoader, MathJaxLoader,
              MathJaxTokenProvider, VisibilityObserver
 Sources/PhysicaDemo/        wasm executables (browser demo apps)
-  Example1/  the main demo — App.swift boots PendulumDemo (index.html) or
-             EquationStoryDemo (story.html); bundle js/
+  Example1/  pendulum animation demo — Example1.swift boots PendulumDemo;
+             bundle js-example1/, shell example1.html
+  Example2/  equation story demo — Example2.swift boots EquationStoryDemo;
+             bundle js-example2/, shell example2.html
   Example0/  standalone wave-equation story; bundle js-example0/, example0.html
 Sources/StoryStudio/        WYSIWYG story editor; bundle js-studio/, studio.html
 Tests/PhysicaTests/         swift-testing suites, debugString/snapshot assertions

@@ -1,4 +1,4 @@
-// EquationStoryDemo — the four-slide scrollytelling demo for story.html.
+// EquationStoryDemo — the four-slide scrollytelling demo for example2.html.
 //
 //  1. Setup   — a mass on a string (a global, always on the board) + a title.
 //  2. Forces  — weight and tension arrows draw on; tapping the tension overlays

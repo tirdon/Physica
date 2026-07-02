@@ -70,10 +70,10 @@ swipe recognizer for touch step-nav, action buttons, and a RAF loop that ignores
 scroll input while a tween drives the scrollbar (echo-safe). It logs the story
 first, so a GPU-free smoke run still prints it.
 
-`story.html` is a separate page (`#story-pin` sticky element, spacer track, and
-`globalThis.physicaStory = true` set before init). `index.html` and the smoke
-test are untouched — `App.boot` branches on `physicaStory` to pick the story
-runtime versus the plain ``WebRuntime``.
+`example2.html` is Example2's dedicated shell page (`#story-pin` sticky element,
+spacer track). Example0's `example0.html` follows the same pattern. `example1.html`
+and the smoke test are untouched — Example1 boots the plain ``WebRuntime`` pendulum
+demo.
 
 ## See also
 

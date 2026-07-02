@@ -113,6 +113,15 @@ let package = Package(
 			]
         ),
         .executableTarget(
+            name: "Example2",
+			dependencies: [
+				.product(name: "JavaScriptKit", package: "JavaScriptKit"),
+				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
+				.target(name: "Physica")
+				],
+			path: "Sources/PhysicaDemo/Example2"
+        ),
+        .executableTarget(
             name: "Example0",
 			dependencies: [
 				.product(name: "JavaScriptKit", package: "JavaScriptKit"),
