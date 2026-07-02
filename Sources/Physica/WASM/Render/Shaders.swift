@@ -4,6 +4,16 @@
 // 3 blackboard backdrop), yz = grain seed (entity position); meshes use x = shading
 // (0 lambert / 1 toon), y = toon bands, z = outline inflate.
 
+import PhysicaMath
+import PhysicaAlgebra
+import PhysicaGeometry
+import PhysicaTypesetting
+import PhysicaKernel
+import PhysicaPlotting
+import PhysicaStory
+import PhysicaPhysics
+import PhysicaEquationGame
+
 enum Shaders {
     static let module = """
     struct Globals {

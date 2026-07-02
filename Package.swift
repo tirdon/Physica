@@ -14,12 +14,60 @@ let package = Package(
 	],
 	dependencies: [.package(url: "https://github.com/swiftwasm/JavaScriptKit.git", branch: "main" )],
     targets: [
-		// Core stays dependency-free on host platforms; the WASM/ subtree
-		// (renderer + browser glue, all `#if os(WASI)`) links JavaScriptKit
-		// only when building for wasm.
+		// Layered library targets (REDESIGN.md Phase 5): directories ARE the
+		// layers, the compiler enforces the DAG, and the `Physica` umbrella
+		// re-exports everything so consumers keep a single `import Physica`.
+		.target(name: "PhysicaMath", path: "Sources/Physica/Math"),
+		.target(name: "PhysicaAlgebra", path: "Sources/Physica/Algebra"),
 		.target(
-			name: "Physica",
+			name: "PhysicaGeometry",
+			dependencies: ["PhysicaMath"],
+			path: "Sources/Physica/Geometry"
+		),
+		.target(
+			name: "PhysicaTypesetting",
+			dependencies: ["PhysicaMath", "PhysicaGeometry"],
+			path: "Sources/Physica/Typesetting"
+		),
+		// The mutually-coupled core: object model + animation machinery +
+		// scene/camera/snapshot + entity kinds + interaction. One target on
+		// purpose — Scene and Animation call into each other by design.
+		.target(
+			name: "PhysicaKernel",
+			// Algebra rides in for the drag vocabulary (DragPayload carries
+			// Expression/ProjectionAxis) — a pre-existing domain edge.
+			dependencies: ["PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting"],
+			path: "Sources/Physica",
+			sources: ["ECS", "Animation", "Scene", "Entities", "Interaction"]
+		),
+		.target(
+			name: "PhysicaPlotting",
+			dependencies: ["PhysicaMath", "PhysicaGeometry", "PhysicaTypesetting", "PhysicaKernel"],
+			path: "Sources/Physica/Plotting"
+		),
+		.target(
+			name: "PhysicaStory",
+			dependencies: ["PhysicaMath", "PhysicaGeometry", "PhysicaKernel"],
+			path: "Sources/Physica/Story"
+		),
+		.target(
+			name: "PhysicaPhysics",
+			dependencies: ["PhysicaMath", "PhysicaGeometry", "PhysicaKernel"],
+			path: "Sources/Physica/Physics"
+		),
+		.target(
+			name: "PhysicaEquationGame",
+			dependencies: ["PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting", "PhysicaKernel"],
+			path: "Sources/Physica/EquationGame"
+		),
+		// Browser glue + WebGPU renderer — every file `#if os(WASI)`; the sole
+		// JavaScriptKit dependency, still conditional so host builds stay clean.
+		.target(
+			name: "PhysicaWeb",
 			dependencies: [
+				"PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting",
+				"PhysicaKernel", "PhysicaPlotting", "PhysicaStory", "PhysicaPhysics",
+				"PhysicaEquationGame",
 				.product(
 					name: "JavaScriptKit", package: "JavaScriptKit",
 					condition: .when(platforms: [.wasi])
@@ -28,11 +76,27 @@ let package = Package(
 					name: "JavaScriptEventLoop", package: "JavaScriptKit",
 					condition: .when(platforms: [.wasi])
 				),
-			]
+			],
+			path: "Sources/Physica/WASM"
+		),
+		// Umbrella: `@_exported import` of every layer.
+		.target(
+			name: "Physica",
+			dependencies: [
+				"PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting",
+				"PhysicaKernel", "PhysicaPlotting", "PhysicaStory", "PhysicaPhysics",
+				"PhysicaEquationGame", "PhysicaWeb",
+			],
+			path: "Sources/Physica/Umbrella"
 		),
         .testTarget(
             name: "PhysicaTests",
-            dependencies: ["Physica"]
+            dependencies: [
+				"Physica",
+				"PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting",
+				"PhysicaKernel", "PhysicaPlotting", "PhysicaStory", "PhysicaPhysics",
+				"PhysicaEquationGame",
+			]
         ),
 
 		// Examples — each a standalone wasm executable under Sources/PhysicaDemo/.

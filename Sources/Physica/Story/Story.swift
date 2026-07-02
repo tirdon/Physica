@@ -12,6 +12,10 @@
 /// boundaries (absolute times) the playhead rests on within it. `stepBoundaries`
 /// always begins with `startTime` and ends with `endTime` (when the slide has
 /// any duration); zero-duration clips collapse into the surrounding boundary.
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaKernel
+
 public struct Slide: Sendable, Equatable {
     public let index: Int
     public let title: String

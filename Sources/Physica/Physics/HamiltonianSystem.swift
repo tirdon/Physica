@@ -4,6 +4,10 @@
 // Per fixed step: p += F·dt; x += (p/m)·dt; ω = R I⁻¹ Rᵀ L; q += ½ ω̂ q·dt.
 // Collisions edit p and L directly (the Hamiltonian state), never velocities.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaKernel
+
 @MainActor
 public final class HamiltonianSystem: System {
     public static var gravity = Position(0, -9.81, 0)

@@ -1,6 +1,8 @@
 // Path flattening with deterministic subdivision counts (stable for tests and
 // morph topology), plus arc-length resampling used by morphs and Write reveals.
 
+import PhysicaMath
+
 public struct FlattenedContour: Sendable, Equatable {
     public var points: [SIMD2<Real>]
     public var isClosed: Bool
@@ -59,7 +61,7 @@ public struct FlattenedContour: Sendable, Equatable {
 }
 
 extension SIMD2<Real> {
-    func distance() -> Real {
+    package func distance() -> Real {
         (x * x + y * y).squareRoot()
     }
 }

@@ -12,6 +12,10 @@
 // one stored field this needs, `carriedThisSlide`, lives on `Scene` because Swift
 // extensions can't add stored properties.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 extension Scene {
     /// Keep `entities` on the board past this slide: excludes them from this
     /// slide's auto-clear, so they persist into later slides until an explicit
@@ -34,7 +38,7 @@ extension Scene {
     }
 
     /// Resets the per-slide carry set. Called by `Story` after recording a slide.
-    func resetSlideCarry() {
+    package func resetSlideCarry() {
         carriedThisSlide.removeAll()
     }
 
@@ -42,7 +46,7 @@ extension Scene {
     /// `SlideClearTrack` clip that drops them only when the viewer advances *past*
     /// the boundary (not when resting on it), and re-inserts them on scrub back.
     /// Called by `Story` at the next slide's start. No-op for an empty set.
-    func enqueueSlideClear(_ entities: [Entity]) {
+    package func enqueueSlideClear(_ entities: [Entity]) {
         guard !entities.isEmpty else { return }
         let track = SlideClearTrack(removing: entities)
         timeline.enqueue(AnimationClip(label: track.label, tracks: [track]))

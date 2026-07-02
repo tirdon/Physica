@@ -3,6 +3,9 @@
 
 // MARK: - Big-endian reader
 
+import PhysicaMath
+import PhysicaGeometry
+
 struct ByteReader {
     let data: [UInt8]
     var offset: Int

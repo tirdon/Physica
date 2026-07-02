@@ -1,6 +1,6 @@
 // GPU-free smoke for the Example0 story bundle: instantiate under Bun (no DOM,
 // no GPU) and let the Swift entry log the story structure. Build first:
-//   swift package --swift-sdk 6.3-RELEASE-wasm32-unknown-wasip1-threads \
+//   swift package --swift-sdk 6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads \
 //     --allow-writing-to-directory js-example0 js --use-cdn \
 //     --output js-example0 --product Example0
 import { instantiate } from "../js-example0/instantiate.js";

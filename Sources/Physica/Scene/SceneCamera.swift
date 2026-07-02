@@ -12,6 +12,10 @@
 // self-referential — it's shadowed as unavailable; use `move(to: Position)`
 // or `focus(on:)`.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 public final class SceneCamera: Entity {
     private unowned let owner: Scene
@@ -88,6 +92,18 @@ public final class SceneCamera: Entity {
         ])
     }
 
+    /// Animate the framing center. The camera's z (its distance from the
+    /// z = 0 stage plane) is **preserved** by default, so an absolute recenter
+    /// like `move(to: 6.i)` never dollies the camera onto the stage; pass
+    /// `keepingZ: false` to honor the destination's z exactly.
+    @discardableResult
+    public func move(to position: Position, keepingZ: Bool = true) -> Animation {
+        let blueprint: any AnimationBlueprint = keepingZ
+            ? CameraMoveBlueprint(destination: position)
+            : MoveBlueprint(destination: position)
+        return Animation(pairs: [AnimationPair(target: self, blueprint: blueprint)])
+    }
+
     /// Unit moves resolve against the camera frame itself — self-referential.
     @available(*, unavailable, message: "scene.frame can't move to a frame edge of itself; use move(to: Position) or focus(on:)")
     public func move(to unit: Unit, padding: Real = 0.5) -> Animation {
@@ -100,6 +116,25 @@ public final class SceneCamera: Entity {
 }
 
 // MARK: - Blueprints
+
+/// The camera's own absolute move: recenters x/y, keeps the current z (the
+/// stage distance) — resolved at clip begin like every camera blueprint.
+struct CameraMoveBlueprint: AnimationBlueprint {
+    let destination: Position
+    var debugLabel: String { "move(to: \(fmt(destination)))" }
+
+    func makeTrack(
+        target: Entity, duration: TimeInterval, offset: TimeInterval, easing: Easing, in scene: Scene
+    ) -> any AnimationTrackProtocol {
+        PropertyTrack<Position>(
+            target: target, duration: duration, offset: offset, easing: easing,
+            label: "\(name(of: target)).\(debugLabel)",
+            read: { $0.position },
+            write: { $0.position = $1 },
+            resolveEnd: { _, start in Position(destination.x, destination.y, start.z) }
+        )
+    }
+}
 
 struct ZoomBlueprint: AnimationBlueprint {
     let factor: Real

@@ -4,6 +4,10 @@
 /// Scene backdrop: a flat clear color, or a blackboard slate whose procedural
 /// smudge-and-dust texture the renderer paints as a fullscreen pass behind
 /// everything (`scene.background = .blackboard`).
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 public enum SceneBackground: Sendable, Equatable {
     case color(Color)
     case blackboard(tint: Color)
@@ -161,13 +165,8 @@ extension Scene {
         var strokeScale = 0.1 * Swift.max(frame.size.x, frame.size.y)
         if strokeScale <= 0 { strokeScale = 1 }
 
-        for (index, root) in entities.enumerated() {
-            collect(
-                entity: root,
-                indexPath: "\(index)",
-                strokeScale: strokeScale,
-                into: &primitives
-            )
+        for root in entities {
+            collect(entity: root, strokeScale: strokeScale, into: &primitives)
         }
 
         return SceneSnapshot(
@@ -188,7 +187,6 @@ extension Scene {
 
     private func collect(
         entity: Entity,
-        indexPath: String,
         strokeScale: Real,
         into primitives: inout [RenderPrimitive]
     ) {
@@ -279,13 +277,8 @@ extension Scene {
         }
 
         if let group = entity as? Group {
-            for (childIndex, child) in group.children.enumerated() {
-                collect(
-                    entity: child,
-                    indexPath: "\(indexPath).\(childIndex)",
-                    strokeScale: strokeScale,
-                    into: &primitives
-                )
+            for child in group.children {
+                collect(entity: child, strokeScale: strokeScale, into: &primitives)
             }
         }
     }

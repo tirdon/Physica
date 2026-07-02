@@ -1,10 +1,22 @@
 // Group — an entity that owns children and propagates its transform to them.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 public protocol HasHierarchy: AnyObject {
     var children: [Entity] { get }
     func addChild(_ entity: Entity)
     func removeChild(_ entity: Entity)
+}
+
+/// An entity that belongs to a host group rather than the scene's root list:
+/// `Scene.insert` attaches it to its anchor instead of rooting it (plots
+/// attach to their plane, so board transforms and rescales carry them).
+@MainActor
+public protocol GroupAnchored: AnyObject {
+    var anchorGroup: Group { get }
 }
 
 @MainActor
@@ -40,6 +52,17 @@ open class Group: Entity, HasHierarchy {
         children.remove(at: index)
         entity.parent = nil
         entity.scene = nil
+        childrenDidChange()
+    }
+
+    /// Re-inserts a child at a specific slot (painter's order among siblings) —
+    /// scrub rewinds restoring a removed child use this to land it back where
+    /// it was.
+    func insertChild(_ entity: Entity, at index: Int) {
+        guard entity !== self, entity.parent !== self else { return }
+        entity.parent = self
+        if scene != nil { entity.scene = scene }
+        children.insert(entity, at: Swift.min(index, children.count))
         childrenDidChange()
     }
 

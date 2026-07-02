@@ -1,6 +1,14 @@
 import Foundation
 import Testing
-@testable import Physica
+@testable import PhysicaMath
+@testable import PhysicaAlgebra
+@testable import PhysicaGeometry
+@testable import PhysicaTypesetting
+@testable import PhysicaKernel
+@testable import PhysicaPlotting
+@testable import PhysicaStory
+@testable import PhysicaPhysics
+@testable import PhysicaEquationGame
 
 /// Same skip-guard pattern as TTFTests — label tests need a real glyf font.
 private func loadLabelFont() -> Font? {

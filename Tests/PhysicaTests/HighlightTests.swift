@@ -1,5 +1,13 @@
 import Testing
-@testable import Physica
+@testable import PhysicaMath
+@testable import PhysicaAlgebra
+@testable import PhysicaGeometry
+@testable import PhysicaTypesetting
+@testable import PhysicaKernel
+@testable import PhysicaPlotting
+@testable import PhysicaStory
+@testable import PhysicaPhysics
+@testable import PhysicaEquationGame
 
 @Suite @MainActor
 struct HighlightTests {

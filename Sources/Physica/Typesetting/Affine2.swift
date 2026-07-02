@@ -4,6 +4,9 @@
 // MARK: - 2D affine transform (SVG semantics)
 
 /// Column-major 2×3: x' = a·x + c·y + e, y' = b·x + d·y + f.
+import PhysicaMath
+import PhysicaGeometry
+
 struct Affine2 {
     var a: Real = 1, b: Real = 0, c: Real = 0, d: Real = 1, e: Real = 0, f: Real = 0
 

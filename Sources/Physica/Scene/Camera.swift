@@ -1,5 +1,9 @@
 // Camera — orthographic by default (Manim-style 2D), perspective for 3D physics.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 public struct Camera: Sendable {
     public enum Projection: Sendable, Equatable {
         /// Longest visible side is `extent`; the short side follows the aspect:

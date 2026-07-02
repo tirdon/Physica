@@ -8,6 +8,10 @@
 /// One (target, blueprint) pairing inside an `Animation`. The id survives copies,
 /// so a blueprint consumed by `scene.add` is recognized (and skipped) when a
 /// chained descriptor carries it into a later `play`.
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 public struct AnimationPair {
     private static var nextID: UInt64 = 1
@@ -87,7 +91,7 @@ public struct Animation: Animatable, HasTransform {
 }
 
 @MainActor
-func name(of entity: Entity) -> String {
+package func name(of entity: Entity) -> String {
     entity.name.isEmpty ? String(describing: type(of: entity)) : entity.name
 }
 

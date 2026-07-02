@@ -1,5 +1,13 @@
 import Testing
-@testable import Physica
+@testable import PhysicaMath
+@testable import PhysicaAlgebra
+@testable import PhysicaGeometry
+@testable import PhysicaTypesetting
+@testable import PhysicaKernel
+@testable import PhysicaPlotting
+@testable import PhysicaStory
+@testable import PhysicaPhysics
+@testable import PhysicaEquationGame
 
 // Genuine MathJax 3.2 tex-svg output (fontCache: "local"), rendered offline —
 // the same component the browser loads, so structure drift shows up here.

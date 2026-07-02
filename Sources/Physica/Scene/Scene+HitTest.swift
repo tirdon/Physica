@@ -7,6 +7,10 @@
 // `worldPosition(normalizedViewport:)` (Input/Input.swift), so the editor can
 // place DOM overlays (selection box, handles) over a world-space entity.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 extension Scene {
     /// The topmost entity — roots in painter order, group children depth-first,
     /// last match wins — whose world-XY bounds contain `point`. World z is ignored.

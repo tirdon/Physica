@@ -1,5 +1,13 @@
 import Testing
-@testable import Physica
+@testable import PhysicaMath
+@testable import PhysicaAlgebra
+@testable import PhysicaGeometry
+@testable import PhysicaTypesetting
+@testable import PhysicaKernel
+@testable import PhysicaPlotting
+@testable import PhysicaStory
+@testable import PhysicaPhysics
+@testable import PhysicaEquationGame
 
 // Genuine `dvisvgm --no-fonts --bbox=min` output for `$x=1$` at 10pt (single
 // quotes, pt coordinates, no scale(1,-1) group) — proves MathSVG parses the

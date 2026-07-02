@@ -5,7 +5,7 @@ An exact CAS and a drag-the-term-across-the-equals interaction built on it.
 ## Overview
 
 `Sources/Physica/Algebra/` is a dependency-free, host-tested computer algebra
-core, and `Sources/Physica/Equation/` renders it as draggable tokens. Together
+core, and `Sources/Physica/EquationGame/` renders it as draggable tokens. Together
 they make the equation a thing the viewer manipulates, with the algebra checked
 exactly rather than numerically.
 

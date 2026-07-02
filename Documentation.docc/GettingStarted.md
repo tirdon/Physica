@@ -5,14 +5,15 @@ Build, run, and write your first Physica scene.
 ## Overview
 
 Physica is a Swift package built around the `Physica` library (the whole
-framework) plus thin wasm executables that host it in the browser: `PhysicaDemo`
-(the pendulum + equation-story demos) and `Example0` (a minimal standalone
-example). Almost everything lives in the library and runs on macOS, so the
-fastest feedback loop is `swift test` — no GPU or wasm toolchain required.
+framework) plus thin wasm executables that host it in the browser:
+`Example1` (the pendulum + equation-story demos), `Example0` (a minimal
+standalone example), and `StoryStudio` (a WYSIWYG story editor). Almost
+everything lives in the library and runs on macOS, so the fastest feedback
+loop is `swift test` — no GPU or wasm toolchain required.
 
 ### Requirements
 
-- The Swift 6.3 toolchain plus the `6.3-RELEASE-wasm32-unknown-wasip1-threads`
+- The Swift 6.3 toolchain plus the `6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads`
   Swift SDK.
 - [Bun](https://bun.sh) to serve the bundle and run the headless smoke test.
 - A WebGPU-capable browser (Chrome/Edge 113+, Safari 18+) to see pixels.
@@ -25,7 +26,7 @@ swift test
 swift test --filter TimelineTests          # one suite
 
 # WebAssembly bundle (Real == Float) → ./js
-swift package --swift-sdk 6.3-RELEASE-wasm32-unknown-wasip1-threads --allow-writing-to-directory js js --use-cdn --output js --product PhysicaDemo
+swift package --swift-sdk 6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads --allow-writing-to-directory js js --use-cdn --output js --product Example1
 
 # Serve with the COOP/COEP headers wasip1-threads needs
 bun bunserver.js          # → http://localhost:3000

@@ -2,6 +2,8 @@
 // otherwise both are resampled onto a shared spherical direction grid by raycasting
 // from the centroid (good for star-shaped solids; torus↔torus should share grids).
 
+import PhysicaMath
+
 public enum MeshMorph {
     public struct Matched: Sendable {
         public var from: Mesh
@@ -109,78 +111,5 @@ public enum MeshMorph {
     }
 }
 
-// MARK: - Morph animation for MeshEntity
-
-public extension MeshEntity {
-    @discardableResult
-    func morph(to target: MeshEntity) -> Animation {
-        Animation(pairs: [AnimationPair(target: self, blueprint: MeshMorphBlueprint(target: target))])
-    }
-}
-
-struct MeshMorphBlueprint: AnimationBlueprint {
-    let target: MeshEntity
-    var debugLabel: String { "morph(to: mesh)" }
-
-    func makeTrack(
-        target entity: Entity, duration: TimeInterval, offset: TimeInterval, easing: Easing, in scene: Scene
-    ) -> any AnimationTrackProtocol {
-        MeshMorphTrack(
-            entity: entity, target: target, duration: duration, offset: offset, easing: easing,
-            label: "\(name(of: entity)).\(debugLabel)"
-        )
-    }
-}
-
-@MainActor
-final class MeshMorphTrack: AnimationTrackProtocol {
-    let duration: TimeInterval
-    let offset: TimeInterval
-    let label: String
-    private let easing: Easing
-    private let entity: Entity
-    private let target: MeshEntity
-
-    private var originalMesh: Mesh?
-    private var targetMesh: Mesh?
-    private var matched: MeshMorph.Matched?
-
-    init(
-        entity: Entity, target: MeshEntity, duration: TimeInterval, offset: TimeInterval,
-        easing: Easing, label: String
-    ) {
-        self.entity = entity
-        self.target = target
-        self.duration = max(duration, 0)
-        self.offset = max(offset, 0)
-        self.easing = easing
-        self.label = label
-    }
-
-    func begin(in scene: Scene) {
-        guard matched == nil, let meshEntity = entity as? MeshEntity else { return }
-        originalMesh = meshEntity.mesh
-        targetMesh = target.mesh
-        matched = MeshMorph.matched(meshEntity.mesh, target.mesh)
-    }
-
-    func apply(at clipTime: TimeInterval, in scene: Scene) {
-        guard let matched, let meshEntity = entity as? MeshEntity else { return }
-        let t = progress(at: clipTime, easing: easing)
-        if t <= 0, let originalMesh {
-            meshEntity.mesh = originalMesh  // exact source topology at the start
-            return
-        }
-        if t >= 1, let targetMesh {
-            meshEntity.mesh = targetMesh
-            return
-        }
-        meshEntity.mesh = MeshMorph.interpolate(matched, t: t)
-    }
-
-    func rewind(in scene: Scene) {
-        if let originalMesh, let meshEntity = entity as? MeshEntity {
-            meshEntity.mesh = originalMesh
-        }
-    }
-}
+// The mesh-morph animation built on this lives in the kernel
+// (Animation/MorphAnimations.swift) — this file is pure geometry.

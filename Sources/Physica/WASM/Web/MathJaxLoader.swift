@@ -2,6 +2,16 @@
 // markup, which MathSVG turns into glyph paths. DOM-only: headless smoke
 // (Bun, no document) bails out with .unavailable and the demo skips math.
 
+import PhysicaMath
+import PhysicaAlgebra
+import PhysicaGeometry
+import PhysicaTypesetting
+import PhysicaKernel
+import PhysicaPlotting
+import PhysicaStory
+import PhysicaPhysics
+import PhysicaEquationGame
+
 #if os(WASI)
 import JavaScriptKit
 import JavaScriptEventLoop

@@ -1,0 +1,7 @@
+{
+  "dependencies": {},
+  "devDependencies": {
+    "@bjorn3/browser_wasi_shim": "^0.4.2",
+    "puppeteer-core": "^25.3.0"
+  }
+}

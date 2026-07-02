@@ -4,6 +4,16 @@
 // holes via nonzero winding), strokes are CPU-expanded quads, meshes are Lambert.
 // 4× MSAA throughout; one render pass per frame; buffers rebuilt per frame.
 
+import PhysicaMath
+import PhysicaAlgebra
+import PhysicaGeometry
+import PhysicaTypesetting
+import PhysicaKernel
+import PhysicaPlotting
+import PhysicaStory
+import PhysicaPhysics
+import PhysicaEquationGame
+
 #if os(WASI)
 import JavaScriptKit
 import JavaScriptEventLoop

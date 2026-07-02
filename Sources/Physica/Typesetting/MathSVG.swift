@@ -3,6 +3,9 @@
 // machine-generated and regular — <defs> glyph outlines, <g> transform
 // groups, <use> references, <rect> rules (fraction bars, \sqrt overlines).
 
+import PhysicaMath
+import PhysicaGeometry
+
 public enum MathSVGError: Error, Equatable, Sendable {
     case notAnSVGDocument
     /// A <use> pointed at an id that has no <defs> path. MathJax only emits
@@ -28,7 +31,7 @@ public enum MathSVG {
     /// the whole formula centered on its bounds.
     public static func glyphs(
         fromSVG markup: String, unitsPerEm: Real = mathJaxUnitsPerEm
-    ) throws -> [TextComponent.PositionedGlyph] {
+    ) throws -> [PositionedGlyph] {
         var glyphPaths = try collect(fromSVG: markup, unitsPerEm: unitsPerEm).paths
 
         var bounds = Bounds.empty
@@ -40,7 +43,7 @@ public enum MathSVG {
         )
         glyphPaths = glyphPaths.map { $0.translated(by: -center) }
 
-        return glyphPaths.map { TextComponent.PositionedGlyph(path: $0, offset: .zero) }
+        return glyphPaths.map { PositionedGlyph(path: $0, offset: .zero) }
     }
 
     /// Like `glyphs(fromSVG:)` but baseline-relative instead of bounds-centered:
@@ -50,10 +53,10 @@ public enum MathSVG {
     /// `style="vertical-align: -N.NNNex"` and converted to em (negative = below).
     public static func measuredGlyphs(
         fromSVG markup: String, unitsPerEm: Real = mathJaxUnitsPerEm
-    ) throws -> (glyphs: [TextComponent.PositionedGlyph], baselineOffset: Real) {
+    ) throws -> (glyphs: [PositionedGlyph], baselineOffset: Real) {
         let collected = try collect(fromSVG: markup, unitsPerEm: unitsPerEm)
         let baseline = parseVerticalAlignEx(collected.rootStyle).map { $0 * emPerEx } ?? 0
-        return (collected.paths.map { TextComponent.PositionedGlyph(path: $0, offset: .zero) }, baseline)
+        return (collected.paths.map { PositionedGlyph(path: $0, offset: .zero) }, baseline)
     }
 
     /// Shared scan: every glyph path in em units (y-up, baseline at 0, not
@@ -183,24 +186,5 @@ public enum MathSVG {
     }
 }
 
-public extension TextEntity {
-    /// Formula entity from MathJax tex-svg markup (the <svg> element's outer
-    /// HTML, e.g. from `MathJax.tex2svg(tex)`): `scene.play(.write(formula))`
-    /// writes it symbol by symbol like any text.
-    static func math(
-        svg: String, fontSize: Real = 1, color: Color = .white, named name: String = "Formula",
-        unitsPerEm: Real = MathSVG.mathJaxUnitsPerEm
-    ) throws -> TextEntity {
-        let entity = TextEntity(
-            glyphs: try MathSVG.glyphs(fromSVG: svg, unitsPerEm: unitsPerEm), fontSize: fontSize
-        )
-        entity.components[RenderStyleComponent.self] = RenderStyleComponent(
-            color: color,
-            strokeColor: color,
-            strokeWidth: 0.012 * fontSize,
-            isFilled: true
-        )
-        entity.name = name
-        return entity
-    }
-}
+// `TextEntity.math(svg:)` — the entity-side face of this parser — lives in the
+// kernel (Entities/TextEntityMath.swift).

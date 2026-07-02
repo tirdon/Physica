@@ -4,6 +4,16 @@
 // a baseline. A token that fails to render (or yields no glyphs, e.g. a space)
 // degrades to an empty run with a measured width, so layout still spaces it.
 
+import PhysicaMath
+import PhysicaAlgebra
+import PhysicaGeometry
+import PhysicaTypesetting
+import PhysicaKernel
+import PhysicaPlotting
+import PhysicaStory
+import PhysicaPhysics
+import PhysicaEquationGame
+
 #if os(WASI)
 import JavaScriptKit
 

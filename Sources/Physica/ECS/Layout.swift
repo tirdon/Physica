@@ -4,6 +4,10 @@
 // invalidateLayout()); the scene runs pending layouts once per frame, children
 // before parents so nested layouts compose.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 open class Layout: Group {  // Group already provides HasHierarchy
     public var spacing: Real = 0.25 {
@@ -36,7 +40,7 @@ open class Layout: Group {  // Group already provides HasHierarchy
 
     /// Child bounds in this layout's space, ignoring the child's position
     /// (which the layout is about to assign).
-    func placementBounds(of child: Entity) -> Bounds {
+    package func placementBounds(of child: Entity) -> Bounds {
         child.localBounds.transformed(
             by: Transform(orientation: child.orientation, scale: child.scale)
         )

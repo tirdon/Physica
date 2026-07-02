@@ -7,14 +7,18 @@
 // and systems each frame, and once after every seek, so derived geometry is always
 // consistent with whatever moved its sources.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 public struct UpdaterComponent: Component {
-    public struct Entry {
-        public let id: UInt64
+    struct Entry {
+        let id: UInt64
         let raw: Any
         let run: @MainActor (Entity) -> Void
     }
 
-    public internal(set) var entries: [Entry] = []
+    var entries: [Entry] = []
 
     public init() {}
 

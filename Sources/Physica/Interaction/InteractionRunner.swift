@@ -10,6 +10,10 @@
 
 /// What happens to an in-flight interaction clip when it is interrupted
 /// (slide change, explicit cancel).
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 public enum InterruptionPolicy: Sendable, Equatable {
     /// Jump to the end state instantly — the default; game results must land.
     case complete

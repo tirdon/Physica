@@ -1,6 +1,8 @@
 // Path — 2D vector geometry (XY plane) built from line/quad/cubic segments.
 // TrueType glyphs (quadratic) and shape builders (cubic) both lower into this.
 
+import PhysicaMath
+
 public struct Path: Sendable, Equatable {
     public enum Segment: Sendable, Equatable {
         case line(to: SIMD2<Real>)

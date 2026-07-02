@@ -4,6 +4,10 @@
 // bake them into tracks at enqueue time, and tracks capture start values lazily at
 // first playback so sequential clips compose.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 public protocol AnimationBlueprint {
     var defaultDuration: Duration { get }
@@ -237,11 +241,15 @@ struct ColorBlueprint: AnimationBlueprint {
     }
 }
 
-struct FadeBlueprint: AnimationBlueprint {
+package struct FadeBlueprint: AnimationBlueprint {
     let opacity: Real
-    var debugLabel: String { "fade(to: \(fmt(opacity, decimals: 2)))" }
+    package var debugLabel: String { "fade(to: \(fmt(opacity, decimals: 2)))" }
 
-    func makeTrack(
+    package init(opacity: Real) {
+        self.opacity = opacity
+    }
+
+    package func makeTrack(
         target: Entity, duration: TimeInterval, offset: TimeInterval, easing: Easing, in scene: Scene
     ) -> any AnimationTrackProtocol {
         PropertyTrack<Real>(

@@ -1,5 +1,13 @@
 import Testing
-@testable import Physica
+@testable import PhysicaMath
+@testable import PhysicaAlgebra
+@testable import PhysicaGeometry
+@testable import PhysicaTypesetting
+@testable import PhysicaKernel
+@testable import PhysicaPlotting
+@testable import PhysicaStory
+@testable import PhysicaPhysics
+@testable import PhysicaEquationGame
 
 func approx(_ a: Real, _ b: Real, tolerance: Real = 1e-4) -> Bool {
     Swift.abs(a - b) <= tolerance

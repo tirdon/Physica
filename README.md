@@ -29,8 +29,8 @@ Manim-style scripted animation API, rendered with WebGPU in the browser.
 swift test
 
 # WebAssembly bundle (Real == Float) → ./js
-swift package --swift-sdk 6.3-RELEASE-wasm32-unknown-wasip1-threads \
-  --allow-writing-to-directory js js --use-cdn --output js --product PhysicaDemo
+swift package --swift-sdk 6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads \
+  --allow-writing-to-directory js js --use-cdn --output js --product Example1
 
 # Serve with the COOP/COEP headers wasip1-threads needs
 bun bunserver.js          # → http://localhost:3000
@@ -39,7 +39,7 @@ bun bunserver.js          # → http://localhost:3000
 bun scripts/smoke.mjs
 ```
 
-Requirements: Swift 6.3 toolchain + the `6.3-RELEASE-wasm32-unknown-wasip1-threads`
+Requirements: Swift 6.3 toolchain + the `6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads`
 Swift SDK, Bun, and a WebGPU-capable browser (Chrome/Edge 113+, Safari 18+).
 Math formulas work out of the box — MathJax is loaded from a CDN at runtime, no
 extra tools needed.
@@ -121,7 +121,7 @@ entity.components[DropTargetComponent.self] = DropTargetComponent(
 )
 ```
 
-`Sources/PhysicaDemo/Demos/PendulumDemo.swift` runs the main demo script;
+`Sources/PhysicaDemo/Example1/Demos/PendulumDemo.swift` runs the main demo script;
 `EquationStoryDemo.swift` is a full scroll-driven equation-solving story at
 `story.html`.
 
@@ -130,41 +130,44 @@ entity.components[DropTargetComponent.self] = DropTargetComponent(
 ```
 Sources/Physica/            dependency-free core — builds & tests on macOS and wasm
   Math/      Real/Position TypeAtlas (#if wasm32 → Float, macOS → Double), sugar
-             (1.i, 2.s), Quaternion, Matrix4, Color, Easing, Unit
-  ECS/       Component(Set), Entity, System/EntityQuery, Group, Layouts, Updater
-  Animation/ Animation + blueprints, tracks (begin/apply/rewind), Clip, Timeline,
-             Highlight, Shake, SaveState
-  Geometry/  Path + flatten, Shapes, PathMorph, Mesh + MeshMorph, SVGPath,
-             Plane + plotting (graph/field/streamlines), Annotations,
-             SampledEntities (polyline + sampled-path entities)
-  Typesetting/ TrueType parser (Font, cmap, ByteReader), TextEntity + write(),
-             GlyphSlice, MathSVG + TagScanner, Affine2
+             (1.i, 2.s), Quaternion, Matrix4, Color, Easing, Interpolatable
   Algebra/   Rational, Expression + parser, Simplifier, Equation + moves,
-             Projection, DisplayToken
-  Equation/  EquationEntity, EquationGame, LiteralEntity,
-             PlaceholderEquationEntity, TokenGlyphProvider
-  Input/     Input events, SwipeRecognizer
-  Interaction/ DragComponents, DragCoordinator, InteractionRunner
-  Story/     Story, StoryPlayer, SlideTransition
-  Physics/   PhysicsShape/Body/Motion, SDFs, HamiltonianSystem
+             Projection, DisplayToken — a pure leaf (no other dependencies)
+  Geometry/  Path + flatten, PathMorph, SVGPath, Mesh + MeshMorph — value types
+  Typesetting/ TrueType parser (Font, cmap, ByteReader), MathSVG + TagScanner,
+             Affine2 — markup → glyph paths, no scene coupling
+  ECS/       Component(Set), Entity, System/EntityQuery, Group, Layouts, Updater
+  Animation/ Animation + blueprints, tracks (begin/apply/rewind), Clip, Timeline;
+             Effects/ Highlight, Shake, SaveState
   Scene/     Scene (scripted API, snapshot), Camera, SceneCamera (animatable),
-             Engine, RenderBackend, ClipComposer, Snapshot
+             Engine, RenderBackend, ClipComposer, Snapshot, Unit
+  Entities/  PathEntity + shapes (Circle…Arrow, Wall), TextEntity + write(),
+             GlyphSlice, MeshEntity, Annotations
+  Plotting/  Plane + AxisOptions, Graph, VectorField, Streamlines, plot tracks
+  Interaction/ Input events, SwipeRecognizer, DragComponents, DragCoordinator,
+             InteractionRunner
+  Story/     Story, StoryPlayer, Transitions/ (fade, zoom, push, morph)
+  Physics/   PhysicsShape/Body/Motion, SDFs, HamiltonianSystem
+  EquationGame/ EquationEntity, EquationGame, LiteralEntity,
+             PlaceholderEquationEntity, TokenGlyphProvider
   WASM/      (all #if os(WASI) — links JavaScriptKit conditionally)
     Render/  WebGPURenderer + WGSL shaders, GeometryUploader, GPUHelpers
     Web/     WebRuntime, StoryRuntime, rAF driver, InputBindings,
              PlaybackControls, DebugOverlay, FontLoader, MathJaxLoader,
              MathJaxTokenProvider, VisibilityObserver
-Sources/PhysicaDemo/        wasm executable — browser entry ("visual test host")
-  App.swift  Boot: story.html → EquationStoryDemo; else → PendulumDemo
-  Demos/     PendulumDemo, EquationStoryDemo
-Sources/Example0/           minimal standalone wasm example (its own scene + bundle)
+Sources/PhysicaDemo/        wasm executables (browser demo apps)
+  Example1/  the main demo — App.swift boots PendulumDemo (index.html) or
+             EquationStoryDemo (story.html); bundle js/
+  Example0/  standalone wave-equation story; bundle js-example0/, example0.html
+Sources/StoryStudio/        WYSIWYG story editor; bundle js-studio/, studio.html
 Tests/PhysicaTests/         swift-testing suites, debugString/snapshot assertions
+Tests/StoryStudioTests/     host tests for the editor's Document/Compiler/History
 ```
 
 ## Testing
 
 ```sh
-swift test                                  # all host tests (~32 suites)
+swift test                                  # all host tests (~42 suites)
 swift test --filter TimelineTests           # one suite
 swift test --filter "TimelineTests/seek"    # tests whose name contains "seek"
 ```

@@ -4,6 +4,9 @@
 
 // MARK: - cmap
 
+import PhysicaMath
+import PhysicaGeometry
+
 struct CharacterMap: Sendable {
     enum Storage: Sendable {
         case format4(endCodes: [UInt16], startCodes: [UInt16], idDeltas: [Int16], idRangeOffsets: [UInt16], rangeBase: Int)

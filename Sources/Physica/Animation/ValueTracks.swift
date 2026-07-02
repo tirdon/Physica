@@ -4,6 +4,10 @@
 
 // MARK: - Generic property track
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 final class PropertyTrack<Value: Interpolatable>: AnimationTrackProtocol {
     let duration: TimeInterval

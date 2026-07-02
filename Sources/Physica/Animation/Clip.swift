@@ -1,5 +1,9 @@
 // AnimationClip — one scheduled step of the scene script, made of parallel tracks.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 public final class AnimationClip: Identifiable {
     public let label: String
@@ -13,7 +17,7 @@ public final class AnimationClip: Identifiable {
 
     public private(set) var hasBegun = false
 
-    init(label: String, tracks: [any AnimationTrackProtocol], explicitDuration: TimeInterval? = nil) {
+    package init(label: String, tracks: [any AnimationTrackProtocol], explicitDuration: TimeInterval? = nil) {
         self.label = label
         self.tracks = tracks
         self.explicitDuration = explicitDuration

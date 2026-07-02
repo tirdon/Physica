@@ -2,6 +2,10 @@
 // The platform layer (wasm executable) drives `tick` from requestAnimationFrame,
 // feeds visibility from IntersectionObserver, and toggles the Shift debug overlay.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 public final class Engine {
     public private(set) var scenes: [Scene] = []
@@ -49,7 +53,10 @@ public final class Engine {
     /// One frame: update + render every visible bound scene.
     public func tick(deltaTime: TimeInterval) {
         for binding in bindings where binding.scene.isVisible {
-            binding.scene.viewportAspect = binding.backend.aspectRatio
+            let aspect = binding.backend.aspectRatio
+            if binding.scene.viewportAspect != aspect {
+                binding.scene.viewportAspect = aspect
+            }
             binding.scene.update(deltaTime: deltaTime)
             binding.backend.render(
                 binding.scene.snapshot(includeDebugLabels: isDebugOverlayActive)

@@ -3,6 +3,10 @@
 
 /// Anything that can stand in for entities in the scripted animation API.
 /// `Entity` returns itself; `Animation` returns its targets.
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 public protocol Animatable {
     var animationTargets: [Entity] { get }
@@ -43,7 +47,7 @@ open class Entity: Animatable, HasTransform, Identifiable, Hashable {
     public var components = ComponentSet()
     public var name: String = ""
     public internal(set) weak var parent: Entity?
-    public internal(set) weak var scene: Scene?
+    public package(set) weak var scene: Scene?
 
     /// Set once an entity is permanently removed: `Scene.insert` refuses to
     /// re-add a retired entity, so an `add` clip replayed by a scrub won't

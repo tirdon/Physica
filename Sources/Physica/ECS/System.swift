@@ -1,5 +1,9 @@
 // System protocol and the ordered registry that drives per-frame updates.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 public protocol System {
     init(scene: Scene)

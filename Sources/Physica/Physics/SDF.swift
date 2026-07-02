@@ -1,6 +1,10 @@
 // Signed-distance functions for the four body shapes (body frame), used for
 // uniform contact generation: sample one body's surface against the other's SDF.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaKernel
+
 public protocol SignedDistanceField: Sendable {
     /// Signed distance from `point` (body frame) to the surface (< 0 inside).
     func distance(at point: Position) -> Real

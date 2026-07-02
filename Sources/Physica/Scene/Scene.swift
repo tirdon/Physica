@@ -4,6 +4,10 @@
 // per-frame `update` advances the timeline, runs systems (wall-clock, skippable),
 // and finishes with the updater pass so derived state is same-frame consistent.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
 public final class Scene: Identifiable {
     private static var nextID: UInt64 = 1
@@ -55,7 +59,7 @@ public final class Scene: Identifiable {
     /// Entities the current slide's content marked with `carry(_:)` — `Story`
     /// reads this to exclude them from the slide's auto-clear, then resets it.
     /// (Story state; the rest of the story API lives in `Scene+Story.swift`.)
-    var carriedThisSlide: [Entity] = []
+    package var carriedThisSlide: [Entity] = []
 
     /// Latest pointer state in world coordinates (poll from systems).
     public internal(set) var pointer = PointerState()
@@ -69,27 +73,107 @@ public final class Scene: Identifiable {
 
     // MARK: Entity management (timeline tracks call these)
 
-    func insert(_ entity: Entity, at index: Int? = nil) {
+    package func insert(_ entity: Entity, at index: Int? = nil) {
         guard !entity.isRetired else { return }
-        guard !entities.contains(where: { $0 === entity }) else { return }
+        guard !contains(entity) else { return }
+        // Anchored entities (plots on their plane) attach to their host group,
+        // never as roots — the host's transform carries them. Lazy: a
+        // factory-made plot stays off the board until its reveal clip.
+        if entity.parent == nil, let anchored = entity as? GroupAnchored {
+            anchored.anchorGroup.addChild(entity)
+            return
+        }
         if let index, index < entities.count {
             entities.insert(entity, at: index)  // re-insert after an erase: keep painter's order
         } else {
             entities.append(entity)
         }
         attach(entity)
+        adoptDescendantRoots(of: entity)
     }
 
-    func detach(_ entity: Entity) {
-        guard let index = entities.firstIndex(where: { $0 === entity }) else { return }
-        entities.remove(at: index)
+    /// Whether `entity` already renders in this scene — it is a root, or some
+    /// ancestor is. The single membership truth; the weak `scene` pointer is a
+    /// cache maintained by insert/detach, never the decider (a transient
+    /// animation bag sets `parent` on members but never joins the scene, so the
+    /// walk also checks each ancestor level against the roots directly).
+    public func contains(_ entity: Entity) -> Bool {
+        var node: Entity? = entity
+        while let current = node {
+            if entities.contains(where: { $0 === current }) { return true }
+            node = current.parent
+        }
+        return false
+    }
+
+    /// Roots a group insert adopted (they render through the group now), with
+    /// their old indices — detaching that group restores them, so every
+    /// insert/detach pair stays exactly inverse and scrubbing across a
+    /// child-first add round-trips.
+    private var adoptedRootsByGroup: [UInt64: [(entity: Entity, index: Int)]] = [:]
+
+    /// A group insert may arrive *after* one of its descendants was added as a
+    /// root (child-first order). The descendant now renders through the group,
+    /// so its root slot must go — it stays in the scene, just not as a root.
+    /// The slot is remembered and restored by `detach` (scrub symmetry).
+    private func adoptDescendantRoots(of entity: Entity) {
+        guard entity is Group else { return }
+        var adopted: [(entity: Entity, index: Int)] = []
+        for (index, root) in entities.enumerated()
+        where root !== entity && isDescendant(root, of: entity) {
+            adopted.append((root, index))
+        }
+        guard !adopted.isEmpty else { return }
+        entities.removeAll { root in adopted.contains { $0.entity === root } }
+        adoptedRootsByGroup[entity.id] = adopted
+    }
+
+    private func isDescendant(_ entity: Entity, of ancestor: Entity) -> Bool {
+        var node = entity.parent
+        while let current = node {
+            if current === ancestor { return true }
+            node = current.parent
+        }
+        return false
+    }
+
+    package func detach(_ entity: Entity) {
+        if let index = entities.firstIndex(where: { $0 === entity }) {
+            entities.remove(at: index)
+            clearScene(entity)
+            // Undo this group's adoption: descendants that were standalone
+            // roots before it arrived become roots again, at their old indices.
+            if let adopted = adoptedRootsByGroup.removeValue(forKey: entity.id) {
+                for entry in adopted.sorted(by: { $0.index < $1.index }) {
+                    insert(entry.entity, at: entry.index)
+                }
+            }
+            return
+        }
+        // Not a root: a child leaving through its parent group (a plot reveal
+        // rewinding, an interaction overlay clearing). removeChild clears the
+        // entity's own cached pointer; clearScene sweeps its subtree's.
+        if let parent = entity.parent as? Group,
+           parent.children.contains(where: { $0 === entity }) {
+            parent.removeChild(entity)
+            clearScene(entity)
+        }
+    }
+
+    /// Mirrors `attach` — a detached root's descendants leave the scene with it
+    /// (the pointer is a cache; leaving children stale was the old dual-encoding
+    /// bug that made re-adds after a slide clear silently no-op).
+    private func clearScene(_ entity: Entity) {
         entity.scene = nil
+        if let group = entity as? Group {
+            for child in group.children { clearScene(child) }
+        }
     }
 
     /// Detaches an entity and marks it retired, so structural re-inserts (a
     /// scrub re-seek replaying an `add` clip) skip it for good. For one-shot
     /// tools like a consumed projection operator that must not reappear.
-    func retire(_ entity: Entity) {
+    package func retire(_ entity: Entity) {
         entity.isRetired = true
         detach(entity)
     }
@@ -143,7 +227,7 @@ public final class Scene: Identifiable {
         addItems(items)
     }
 
-    func addItems(_ items: [any Animatable]) -> Animation {
+    package func addItems(_ items: [any Animatable]) -> Animation {
         var entities: [Entity] = []
         var seen = Set<UInt64>()
         for item in items {
@@ -255,7 +339,7 @@ public final class Scene: Identifiable {
         return playItems(composer.animations, for: nil, easing: easing)
     }
 
-    func playItems(_ items: [any Animatable], for duration: Duration?, easing: Easing?) -> Animation {
+    package func playItems(_ items: [any Animatable], for duration: Duration?, easing: Easing?) -> Animation {
         let baked = bakeClip(items, for: duration, easing: easing)
         timeline.enqueue(baked.clip)
         return Animation(pairs: baked.pairs, duration: .interval(baked.clip.duration))

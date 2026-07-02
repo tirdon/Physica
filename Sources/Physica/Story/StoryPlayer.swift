@@ -19,6 +19,10 @@
 // off-board pre-slide-in state) so the slide-in plays during the arrival tween
 // and the first rest is the landed slide.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaKernel
+
 public struct StoryState: Sendable, Equatable {
     public var slideIndex: Int
     public var time: TimeInterval

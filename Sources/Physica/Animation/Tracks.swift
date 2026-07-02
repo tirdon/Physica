@@ -4,6 +4,10 @@
 // replays after rewind are deterministic); `apply(at:)` is a pure function of
 // clip-local time; `rewind` restores the pre-clip state when scrubbing backward.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 public struct Keyframe<Value: Interpolatable>: Sendable where Value: Sendable {
     public var time: TimeInterval
     public var value: Value
@@ -34,7 +38,7 @@ public protocol AnimationTrackProtocol: AnyObject {
 
 extension AnimationTrackProtocol {
     /// Normalized eased progress for a clip-local time.
-    func progress(at clipTime: TimeInterval, easing: Easing) -> Real {
+    package func progress(at clipTime: TimeInterval, easing: Easing) -> Real {
         let local = clipTime - offset
         if local <= 0 { return duration <= 0 && clipTime >= offset ? easing.apply(1) : 0 }
         if duration <= 0 { return easing.apply(1) }

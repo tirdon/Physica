@@ -1,6 +1,10 @@
 // Physics bodies in Hamiltonian form: state is (transform, linear momentum p,
 // angular momentum L); velocities are derived (v = p/m, ω = R I⁻¹ Rᵀ L).
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaKernel
+
 public enum PhysicsShape: Sendable, Equatable {
     case sphere(radius: Real)
     case box(halfExtents: SIMD3<Real>)

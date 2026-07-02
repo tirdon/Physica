@@ -5,11 +5,15 @@
 // MARK: - Structural tracks
 
 /// 0-duration track that adds entities (and on rewind, removes them again).
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 @MainActor
-final class AddEntitiesTrack: AnimationTrackProtocol {
-    let duration: TimeInterval = 0
-    let offset: TimeInterval = 0
-    let label: String
+package final class AddEntitiesTrack: AnimationTrackProtocol {
+    package let duration: TimeInterval = 0
+    package let offset: TimeInterval = 0
+    package let label: String
 
     private let entities: [Entity]
     /// Entities this track actually inserted (so rewind doesn't evict pre-existing ones).
@@ -23,20 +27,20 @@ final class AddEntitiesTrack: AnimationTrackProtocol {
     /// The entities this track was built to introduce — known at build time (the
     /// `inserted` subset is only computed at runtime `begin`). `Story` scans these
     /// across a slide's clips to find what to tear down at the slide's end.
-    var introducedTargets: [Entity] { entities }
+    package var introducedTargets: [Entity] { entities }
 
-    func begin(in scene: Scene) {
+    package func begin(in scene: Scene) {
         guard inserted == nil else { return }
-        inserted = entities.filter { $0.scene !== scene }
+        inserted = entities.filter { !scene.contains($0) }
     }
 
-    func apply(at clipTime: TimeInterval, in scene: Scene) {
+    package func apply(at clipTime: TimeInterval, in scene: Scene) {
         for entity in inserted ?? [] {
             scene.insert(entity)
         }
     }
 
-    func rewind(in scene: Scene) {
+    package func rewind(in scene: Scene) {
         for entity in inserted ?? [] {
             scene.detach(entity)
         }
@@ -47,15 +51,18 @@ final class AddEntitiesTrack: AnimationTrackProtocol {
 /// entity from the scene. Scrubbing back re-inserts at the original root index
 /// so painter's order and debug-label paths survive the round trip.
 @MainActor
-final class RemoveEntityTrack: AnimationTrackProtocol {
-    let duration: TimeInterval = 0
-    let offset: TimeInterval
-    let label: String
+package final class RemoveEntityTrack: AnimationTrackProtocol {
+    package let duration: TimeInterval = 0
+    package let offset: TimeInterval
+    package let label: String
 
     private let entity: Entity
     private var hasBegun = false
-    /// Root index at clip start; nil = not a scene root then (nothing to remove).
+    /// Root index at clip start; nil = not a scene root then.
     private var rootIndex: Int?
+    /// Child slot at clip start, for targets living inside a group (a plot on
+    /// its plane): removal detaches from the parent, rewind re-inserts there.
+    private var childSlot: (parent: Group, index: Int)?
 
     init(entity: Entity, at offset: TimeInterval) {
         self.entity = entity
@@ -66,31 +73,51 @@ final class RemoveEntityTrack: AnimationTrackProtocol {
     /// The entity this track removes — `Story` reads it to exclude net-transient
     /// entities (a `.fade` overlay, a `.highlight` border introduced *and* removed
     /// inside one slide) from the slide's carry-forward set.
-    var removedTarget: Entity { entity }
+    package var removedTarget: Entity { entity }
 
-    func begin(in scene: Scene) {
+    private func resolveSlot(in scene: Scene) {
+        rootIndex = scene.entities.firstIndex { $0 === entity }
+        if rootIndex == nil,
+           let parent = entity.parent as? Group,
+           let index = parent.children.firstIndex(where: { $0 === entity }) {
+            childSlot = (parent, index)
+        }
+    }
+
+    package func begin(in scene: Scene) {
         guard !hasBegun else { return }
         hasBegun = true
-        rootIndex = scene.entities.firstIndex { $0 === entity }
+        resolveSlot(in: scene)
     }
 
-    func apply(at clipTime: TimeInterval, in scene: Scene) {
+    package func apply(at clipTime: TimeInterval, in scene: Scene) {
         // Targets introduced by this same clip (highlight borders) aren't
-        // roots yet at begin — resolve once the AddEntitiesTrack ran.
-        if rootIndex == nil {
-            rootIndex = scene.entities.firstIndex { $0 === entity }
+        // in the graph yet at begin — resolve once the AddEntitiesTrack ran.
+        if rootIndex == nil, childSlot == nil {
+            resolveSlot(in: scene)
         }
-        guard let index = rootIndex else { return }
-        if clipTime >= offset {
-            scene.detach(entity)
-        } else {
-            scene.insert(entity, at: index)
+        if let index = rootIndex {
+            if clipTime >= offset {
+                scene.detach(entity)
+            } else {
+                scene.insert(entity, at: index)
+            }
+        } else if let slot = childSlot {
+            if clipTime >= offset {
+                scene.detach(entity)
+            } else if !slot.parent.children.contains(where: { $0 === entity }) {
+                slot.parent.insertChild(entity, at: slot.index)
+            }
         }
     }
 
-    func rewind(in scene: Scene) {
-        guard let index = rootIndex else { return }
-        scene.insert(entity, at: index)
+    package func rewind(in scene: Scene) {
+        if let index = rootIndex {
+            scene.insert(entity, at: index)
+        } else if let slot = childSlot,
+                  !slot.parent.children.contains(where: { $0 === entity }) {
+            slot.parent.insertChild(entity, at: slot.index)
+        }
     }
 }
 
@@ -115,7 +142,14 @@ final class SlideClearTrack: AnimationTrackProtocol {
 
     private let targets: [Entity]
     private var captured = false
-    private var removals: [(entity: Entity, index: Int)] = []
+    /// Root index, or (parent, index) for a plane-child target (a plot on its
+    /// board) — same root-vs-child distinction `RemoveEntityTrack` resolves,
+    /// since a slide's introduced set can include either kind. Sorted ascending
+    /// by index so rewind's re-insertion rebuilds each container's original
+    /// order (root and child indices index different arrays, but sorting them
+    /// together is still safe: entries sharing a container keep their relative
+    /// order, and entries in different containers never interact).
+    private var removals: [(entity: Entity, index: Int, parent: Group?)] = []
 
     init(removing targets: [Entity]) {
         self.targets = targets
@@ -125,11 +159,16 @@ final class SlideClearTrack: AnimationTrackProtocol {
     func begin(in scene: Scene) {
         guard !captured else { return }
         captured = true
-        // Capture only those still on the board, sorted by current root index so
-        // re-insertion (ascending) rebuilds painter's order.
         removals = targets
-            .compactMap { entity in
-                scene.entities.firstIndex { $0 === entity }.map { (entity: entity, index: $0) }
+            .compactMap { entity -> (entity: Entity, index: Int, parent: Group?)? in
+                if let index = scene.entities.firstIndex(where: { $0 === entity }) {
+                    return (entity, index, nil)
+                }
+                if let parent = entity.parent as? Group,
+                   let index = parent.children.firstIndex(where: { $0 === entity }) {
+                    return (entity, index, parent)
+                }
+                return nil
             }
             .sorted { $0.index < $1.index }
     }
@@ -139,7 +178,15 @@ final class SlideClearTrack: AnimationTrackProtocol {
     }
 
     func rewind(in scene: Scene) {
-        for removal in removals { scene.insert(removal.entity, at: removal.index) }
+        for removal in removals {
+            if let parent = removal.parent {
+                if !parent.children.contains(where: { $0 === removal.entity }) {
+                    parent.insertChild(removal.entity, at: removal.index)
+                }
+            } else {
+                scene.insert(removal.entity, at: removal.index)
+            }
+        }
     }
 }
 

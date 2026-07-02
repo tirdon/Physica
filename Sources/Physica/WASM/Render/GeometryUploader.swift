@@ -1,6 +1,16 @@
 // GeometryUploader — turns a SceneSnapshot into flat GPU-ready arrays + a draw list.
 // Per-frame rebuild: one flat-vertex stream, one mesh stream, one uniform block.
 
+import PhysicaMath
+import PhysicaAlgebra
+import PhysicaGeometry
+import PhysicaTypesetting
+import PhysicaKernel
+import PhysicaPlotting
+import PhysicaStory
+import PhysicaPhysics
+import PhysicaEquationGame
+
 #if os(WASI)
 
 struct DrawCommand {

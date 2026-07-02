@@ -4,6 +4,10 @@
 // time. `seek` fast-forwards by applying intermediate clips at their end and
 // rewinds by undoing clips in reverse — the scrub-safety contract of the tracks.
 
+import PhysicaMath
+import PhysicaGeometry
+import PhysicaTypesetting
+
 public enum TimelineEvent: Sendable, Equatable {
     case clipStarted(index: Int, label: String)
     case clipFinished(index: Int)
@@ -32,9 +36,14 @@ public final class Timeline {
     private var didEmitFinished = false
     private var isSeeking = false
 
-    public var duration: TimeInterval {
-        clips.reduce(0) { $0 + $1.duration }
-    }
+    /// Cumulative clip start times and the running total, maintained by
+    /// `enqueue` (a clip's duration is fixed once enqueued). Playback and
+    /// story scrubbing read start/duration every frame, so neither may be an
+    /// O(clips) scan.
+    private var clipStarts: [TimeInterval] = []
+    private var cachedDuration: TimeInterval = 0
+
+    public var duration: TimeInterval { cachedDuration }
 
     public var isFinished: Bool { activeIndex >= clips.count }
 
@@ -51,7 +60,9 @@ public final class Timeline {
 
     // MARK: Scheduling
 
-    func enqueue(_ clip: AnimationClip) {
+    package func enqueue(_ clip: AnimationClip) {
+        clipStarts.append(cachedDuration)
+        cachedDuration += clip.duration
         clips.append(clip)
         didEmitFinished = false
     }
@@ -132,27 +143,23 @@ public final class Timeline {
         emit(.seeked(to: target))
     }
 
-    /// Clip index containing `time` (last clip whose start ≤ time) and the local offset.
+    /// Clip index containing `time` (last clip whose start ≤ time) and the local
+    /// offset — binary search over the cached starts (zero-duration clips share a
+    /// start; taking the *last* one matches playback order).
     private func locate(_ time: TimeInterval) -> (index: Int, localTime: TimeInterval) {
-        var start: TimeInterval = 0
-        var result = (index: 0, localTime: TimeInterval(0))
-        for (index, clip) in clips.enumerated() {
-            if start <= time {
-                result = (index, min(time - start, clip.duration))
-            } else {
-                break
-            }
-            start += clip.duration
+        guard !clips.isEmpty else { return (0, 0) }
+        var low = 0
+        var high = clipStarts.count
+        while low < high {
+            let mid = (low + high) / 2
+            if clipStarts[mid] <= time { low = mid + 1 } else { high = mid }
         }
-        return result
+        let index = Swift.max(low - 1, 0)
+        return (index, min(max(time - clipStarts[index], 0), clips[index].duration))
     }
 
     private func startTime(of index: Int) -> TimeInterval {
-        var start: TimeInterval = 0
-        for i in 0..<index {
-            start += clips[i].duration
-        }
-        return start
+        index < clipStarts.count ? clipStarts[index] : cachedDuration
     }
 
     // MARK: Events

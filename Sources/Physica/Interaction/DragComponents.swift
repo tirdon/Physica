@@ -8,6 +8,11 @@
 /// What a dragged token carries to a drop target. The game's terms travel as
 /// `.expression`; an axis-projection operator as `.projection`; anything else
 /// (buttons, chips) can use a free-form `.tag`.
+import PhysicaMath
+import PhysicaAlgebra
+import PhysicaGeometry
+import PhysicaTypesetting
+
 public enum DragPayload: Sendable, Equatable {
     case expression(Expression)
     case projection(ProjectionAxis)
