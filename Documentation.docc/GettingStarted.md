@@ -6,9 +6,10 @@ Build, run, and write your first Physica scene.
 
 Physica is a Swift package built around the `Physica` library (the whole
 framework) plus thin wasm executables that host it in the browser:
-`Example1` (the pendulum + equation-story demos), `Example0` (a minimal
-standalone example), and `StoryStudio` (a WYSIWYG story editor). Almost
-everything lives in the library and runs on macOS, so the fastest feedback
+`Example1` (the pendulum animation demo), `Example2` (the equation story demo),
+`Example0` (a minimal standalone example), and `StoryStudio` (a WYSIWYG story
+editor). Almost everything lives in the library and runs on macOS, so the
+fastest feedback
 loop is `swift test` — no GPU or wasm toolchain required.
 
 ### Requirements

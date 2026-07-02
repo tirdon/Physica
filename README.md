@@ -162,6 +162,7 @@ Sources/PhysicaDemo/        wasm executables (browser demo apps)
              bundle js-example2/, shell example2.html
   Example0/  standalone wave-equation story; bundle js-example0/, example0.html
 Sources/StoryStudio/        WYSIWYG story editor; bundle js-studio/, studio.html
+index.html                  landing page linking to all web demos
 Tests/PhysicaTests/         swift-testing suites, debugString/snapshot assertions
 Tests/StoryStudioTests/     host tests for the editor's Document/Compiler/History
 ```

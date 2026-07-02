@@ -12,6 +12,7 @@ swift test --filter "TimelineTests/seek"    # tests whose name contains "seek" i
 # WebAssembly bundles (PackageToJS; the `js` subcommand is required). One per
 # executable product, each into its own bundle dir + shell page — never clobber
 # another product's bundle:
+#   (index.html  → landing page linking to all web demos)
 #   Example1    → js-example1/ (example1.html — pendulum animation demo)
 #   Example2    → js-example2/ (example2.html — equation story)
 #   Example0    → js-example0/ (example0.html — standalone wave story)

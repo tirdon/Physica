@@ -11,7 +11,7 @@ Constraints discovered by the compiler, so nobody re-litigates them:
 
 - `FlattenedContour` stays public — `PathMorph.Matched.from/to` (public morph-data
   API) are `[[FlattenedContour]]`-shaped, and `Path.flattened()` is public with it.
-- `StubTokenGlyphProvider` stays public — Example1's `App.swift` uses it as the
+- `StubTokenGlyphProvider` stays public — Example2's `Example2.swift` uses it as the
   no-font fallback provider.
 - `DragOptions` stays public — `DragCoordinator.options` is a public var.
 - The **six open base classes** (`Entity`, `Group`, `Layout`, `PathEntity`,
