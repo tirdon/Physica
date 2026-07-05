@@ -1,9 +1,7 @@
 // Fade transition — a transient fullscreen quad that fades from opaque to clear
 // as the slide arrives (introduced and removed by its own clip, like `.highlight`).
 
-import PhysicaMath
-import PhysicaGeometry
-import PhysicaKernel
+import PhysicaFoundation
 
 struct FadeTransitionBlueprint: AnimationBlueprint {
     var debugLabel: String { "transition.fade()" }

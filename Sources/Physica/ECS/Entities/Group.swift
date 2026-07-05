@@ -1,7 +1,6 @@
 // Group — an entity that owns children and propagates its transform to them.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

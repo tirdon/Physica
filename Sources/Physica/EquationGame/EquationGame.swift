@@ -8,9 +8,8 @@
 // is ambiguous); a projection operator spawns a new scalar EquationEntity. A
 // resolved move appends a row; reaching the goal highlights and fires `onWin`.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
 

@@ -6,9 +6,8 @@
 // `x·2`) snaps in and highlights; a mismatch is rejected, so the coordinator
 // shakes the box and snaps the literal back. `target == nil` accepts anything.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
 

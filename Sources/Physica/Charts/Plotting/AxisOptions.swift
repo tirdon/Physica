@@ -4,8 +4,7 @@
 
 /// Styling knobs for a `Plane`'s axes and labels — set at init or live via
 /// `plane.axis` (assignment rebuilds the board geometry in place).
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 import PhysicaKernel
 

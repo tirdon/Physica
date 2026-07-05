@@ -4,8 +4,7 @@
 // time. `seek` fast-forwards by applying intermediate clips at their end and
 // rewinds by undoing clips in reverse — the scrub-safety contract of the tracks.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public enum TimelineEvent: Sendable, Equatable {

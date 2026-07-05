@@ -10,9 +10,7 @@
 /// off-board offset (frame-sized, toward `edge`); apply lerps offset→rest and
 /// keeps them inserted; rewind restores rest and detaches the ones it introduced
 /// (so scrubbing before the slide-in takes the new content back off the board).
-import PhysicaMath
-import PhysicaGeometry
-import PhysicaKernel
+import PhysicaFoundation
 
 @MainActor
 final class ContentPushTrack: AnimationTrackProtocol {

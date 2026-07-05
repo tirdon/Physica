@@ -2,8 +2,7 @@
 // math in PhysicaGeometry (PathMorph / MeshMorph): entity factories, the
 // static draw/erase Animation factories, and their scrub-safe tracks.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 // MARK: - Morph + draw animations for PathEntity

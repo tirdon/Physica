@@ -1,9 +1,7 @@
 // Zoom transition — push in/out: the camera starts at `from` and eases to the
 // slide's resting zoom, riding the `SceneCamera` proxy like any camera clip.
 
-import PhysicaMath
-import PhysicaGeometry
-import PhysicaKernel
+import PhysicaFoundation
 
 struct CameraZoomFromBlueprint: AnimationBlueprint {
     let from: Real

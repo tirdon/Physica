@@ -13,13 +13,11 @@
 // vertical swipe fires `pointercancel`, which simply aborts the recognizer.
 // Swipes are skipped over a draggable token and while an arrow tween runs.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
-import PhysicaPlotting
-import PhysicaStory
+import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
 

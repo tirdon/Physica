@@ -1,7 +1,6 @@
 // Camera — orthographic by default (Manim-style 2D), perspective for 3D physics.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public struct Camera: Sendable {

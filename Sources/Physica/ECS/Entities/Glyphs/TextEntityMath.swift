@@ -1,8 +1,7 @@
 // TextEntity.math — formula entities from MathJax tex-svg (or dvisvgm-style)
 // markup, the kernel-side face of PhysicaTypesetting's MathSVG parser.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public extension TextEntity {

@@ -1,12 +1,10 @@
 // Fetches a TTF over HTTP and parses it with the pure-Swift Font parser.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
-import PhysicaPlotting
-import PhysicaStory
+import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
 

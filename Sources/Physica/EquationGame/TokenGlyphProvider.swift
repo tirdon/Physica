@@ -8,9 +8,8 @@
 
 /// Baseline-relative glyphs for one token, in em units (y = 0 at the text
 /// baseline, pen starting at x = 0), plus the advance width.
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
 

@@ -2,7 +2,6 @@
 // otherwise both are resampled onto a shared spherical direction grid by raycasting
 // from the centroid (good for star-shaped solids; torus↔torus should share grids).
 
-import PhysicaMath
 
 public enum MeshMorph {
     public struct Matched: Sendable {

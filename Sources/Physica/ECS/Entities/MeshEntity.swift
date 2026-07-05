@@ -2,8 +2,7 @@
 // snapshot pass stays component-driven; the class is sugar over it (mirrors
 // PathEntity/PathComponent).
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public struct ModelComponent: Component {

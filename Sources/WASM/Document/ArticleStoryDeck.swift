@@ -14,13 +14,11 @@
 // Degrades: no font → titles drop but captions still narrate; no WebGPU → the
 // canvas stays blank but the caption band and nav still work off the player.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
-import PhysicaPlotting
-import PhysicaStory
+import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
 

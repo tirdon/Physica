@@ -1,12 +1,10 @@
 // IntersectionObserver → engine.setVisibility: off-screen scenes stop updating.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
-import PhysicaPlotting
-import PhysicaStory
+import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
 

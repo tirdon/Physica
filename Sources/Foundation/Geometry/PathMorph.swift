@@ -1,7 +1,6 @@
 // Path morphing: subdivide both paths to a shared topology (same contour count,
 // same point count per contour, aligned starts and winding), then lerp.
 
-import PhysicaMath
 
 public enum PathMorph {
     public struct Matched: Sendable {

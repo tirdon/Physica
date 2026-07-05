@@ -3,8 +3,7 @@
 // component-driven; the classes are sugar over it.
 
 /// Vector geometry + reveal state (Write/draw animations cap these).
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public struct PathComponent: Component {

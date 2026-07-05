@@ -3,8 +3,7 @@
 
 /// Anything that can stand in for entities in the scripted animation API.
 /// `Entity` returns itself; `Animation` returns its targets.
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

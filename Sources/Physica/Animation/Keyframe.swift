@@ -1,7 +1,7 @@
 // A single keyframe — a value to reach at a clip-local time, with the easing
 // used to approach it. Consumed by KeyframeTrack (ValueTracks.swift).
 
-import PhysicaMath
+import PhysicaFoundation
 
 public struct Keyframe<Value: Interpolatable>: Sendable where Value: Sendable {
     public var time: TimeInterval

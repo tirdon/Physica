@@ -15,13 +15,11 @@
 // is async — awaits the deck boots after the article is mounted, returning an
 // `ArticleMount` the caller retains for the page life.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
-import PhysicaPlotting
-import PhysicaStory
+import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
 

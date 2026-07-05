@@ -4,8 +4,7 @@
 // Per fixed step: p += F·dt; x += (p/m)·dt; ω = R I⁻¹ Rᵀ L; q += ½ ω̂ q·dt.
 // Collisions edit p and L directly (the Hamiltonian state), never velocities.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaKernel
 
 @MainActor

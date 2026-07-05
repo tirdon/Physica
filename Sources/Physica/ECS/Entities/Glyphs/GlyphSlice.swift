@@ -3,8 +3,7 @@
 // Slices return deferred Animations like every other factory:
 // `scene.play(title[0..<3].color(.orange), for: 0.5.s)`.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

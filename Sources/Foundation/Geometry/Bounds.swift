@@ -1,7 +1,6 @@
 // Bounds — axis-aligned bounding box shared by paths, meshes, and (via the
 // kernel) entity bounds. `empty` unions as a no-op.
 
-import PhysicaMath
 
 public struct Bounds: Sendable, Equatable {
     public var min: Position

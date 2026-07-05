@@ -5,13 +5,11 @@
 // additionally outlines every drop target's hit region as a rectangle, so the
 // user sees where a token lands, not just that an entity accepts drops.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
-import PhysicaPlotting
-import PhysicaStory
+import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
 

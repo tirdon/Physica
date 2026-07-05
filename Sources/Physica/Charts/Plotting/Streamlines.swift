@@ -2,8 +2,7 @@
 // integration from a seed lattice. Topology is constant (lines freeze where they
 // exit the board), so re-plots lerp pointwise: `scene.play(lines.plot { p in ... })`.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 import PhysicaKernel
 

@@ -6,9 +6,8 @@
 // is a TextEntity carrying its DisplayToken, so a token is independently
 // styleable and (in the game) draggable; the provider supplies its glyphs.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
 

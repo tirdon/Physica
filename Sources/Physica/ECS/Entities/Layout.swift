@@ -4,8 +4,7 @@
 // invalidateLayout()); the scene runs pending layouts once per frame, children
 // before parents so nested layouts compose.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

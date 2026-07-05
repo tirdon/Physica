@@ -14,8 +14,7 @@
 // board's transform and rescales carry it — `Scene.insert` routes on
 // `GroupAnchored`.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 import PhysicaKernel
 

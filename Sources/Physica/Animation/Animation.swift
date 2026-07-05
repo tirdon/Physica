@@ -8,8 +8,7 @@
 /// One (target, blueprint) pairing inside an `Animation`. The id survives copies,
 /// so a blueprint consumed by `scene.add` is recognized (and skipped) when a
 /// chained descriptor carries it into a later `play`.
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

@@ -7,8 +7,7 @@
 // and systems each frame, and once after every seek, so derived geometry is always
 // consistent with whatever moved its sources.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public struct UpdaterComponent: Component {

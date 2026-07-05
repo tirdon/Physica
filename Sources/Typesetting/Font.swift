@@ -2,8 +2,7 @@
 // offset-only composites. Glyph outlines are quadratic Béziers in em units (y-up),
 // which lower directly into Path/PathFlatten and the Write stroke pipeline.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 
 public enum FontError: Error, Equatable {
     case invalidFormat

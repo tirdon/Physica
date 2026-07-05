@@ -1,13 +1,11 @@
 // GeometryUploader — turns a SceneSnapshot into flat GPU-ready arrays + a draw list.
 // Per-frame rebuild: one flat-vertex stream, one mesh stream, one uniform block.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
-import PhysicaPlotting
-import PhysicaStory
+import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
 

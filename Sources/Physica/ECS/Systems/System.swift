@@ -1,7 +1,6 @@
 // System protocol and the ordered registry that drives per-frame updates.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

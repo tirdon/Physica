@@ -1,13 +1,11 @@
 // Playback bar wiring: play/pause button, scrub slider, time label.
 // All listeners attach from Swift; the HTML is inert scaffolding.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
-import PhysicaPlotting
-import PhysicaStory
+import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
 

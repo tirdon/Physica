@@ -2,8 +2,7 @@
 // texture/cap enums it carries. TransformComponent lives alongside in
 // TransformComponent.swift.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 /// Procedural grain the renderer applies to a path's fill and stroke.

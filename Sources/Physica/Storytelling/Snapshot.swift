@@ -4,8 +4,7 @@
 /// Scene backdrop: a flat clear color, or a blackboard slate whose procedural
 /// smudge-and-dust texture the renderer paints as a fullscreen pass behind
 /// everything (`scene.background = .blackboard`).
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public enum SceneBackground: Sendable, Equatable {

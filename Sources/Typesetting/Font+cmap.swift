@@ -4,8 +4,7 @@
 
 // MARK: - cmap
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 
 struct CharacterMap: Sendable {
     enum Storage: Sendable {

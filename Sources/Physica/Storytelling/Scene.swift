@@ -4,8 +4,7 @@
 // per-frame `update` advances the timeline, runs systems (wall-clock, skippable),
 // and finishes with the updater pass so derived state is same-frame consistent.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

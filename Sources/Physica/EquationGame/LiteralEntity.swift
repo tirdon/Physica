@@ -8,9 +8,8 @@
 // rides an animating formula) until the drag coordinator grabs it, which fires
 // `onDragBegan` and detaches the follow updater.
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
 

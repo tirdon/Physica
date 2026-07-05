@@ -1,7 +1,6 @@
 // Mesh — indexed triangles with normals, plus UV-grid primitives. Primitives with
 // matching segment counts share topology, which MeshMorph exploits directly.
 
-import PhysicaMath
 
 public struct Mesh: Sendable, Equatable {
     public var positions: [Position]

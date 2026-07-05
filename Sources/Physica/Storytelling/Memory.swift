@@ -6,8 +6,7 @@
 
 /// Timeline-captured transform, written by `saveState()` and read
 /// (non-destructively — repeated restores work) by `restoreState()`.
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public struct SavedStateComponent: Component {

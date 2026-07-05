@@ -2,7 +2,6 @@
 // SVG asset lower into Path through this parser; it speaks the full command
 // set (M/L/H/V/C/S/Q/T/A/Z, absolute and relative, implicit repeats).
 
-import PhysicaMath
 
 public enum SVGPathError: Error, Equatable, Sendable {
     case unexpectedCharacter(Character)

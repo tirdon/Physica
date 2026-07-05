@@ -6,8 +6,7 @@
 // a horizontal swipe to step navigation.
 
 /// The four cardinal directions a completed swipe can resolve to.
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 package enum SwipeDirection: Sendable, Equatable {

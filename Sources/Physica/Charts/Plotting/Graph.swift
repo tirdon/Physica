@@ -3,8 +3,7 @@
 // (`scene.play(graph.plot { x in .cos(x) })`); `value(at:)`/`point(at:)` read the
 // live polyline so annotations track mid-morph.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 import PhysicaKernel
 

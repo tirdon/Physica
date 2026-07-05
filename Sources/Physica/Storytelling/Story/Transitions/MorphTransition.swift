@@ -13,9 +13,7 @@
 /// keeps them inserted; rewind restores the sources to full opacity, the targets
 /// to rest, and detaches the targets it introduced (so scrubbing before the morph
 /// shows the previous board intact and the new content gone).
-import PhysicaMath
-import PhysicaGeometry
-import PhysicaKernel
+import PhysicaFoundation
 
 @MainActor
 final class MorphTransitionTrack: ContentArrivalTrack {

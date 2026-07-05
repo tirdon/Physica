@@ -7,8 +7,7 @@
 /// Which physical device produced a pointer event. Mirrors the DOM
 /// `PointerEvent.pointerType` so the web layer maps it 1:1 — `pen` is an Apple
 /// Pencil / stylus.
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public enum PointerKind: Sendable, Equatable {

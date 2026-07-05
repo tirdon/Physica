@@ -1,7 +1,6 @@
 // AnimationClip — one scheduled step of the scene script, made of parallel tracks.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

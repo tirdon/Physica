@@ -4,8 +4,7 @@
 // replays after rewind are deterministic); `apply(at:)` is a pure function of
 // clip-local time; `rewind` restores the pre-clip state when scrubbing backward.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

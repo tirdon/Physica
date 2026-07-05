@@ -2,8 +2,7 @@
 // the font/markup parsers here and the per-glyph unit of the kernel's
 // TextComponent (which typealiases it back in as TextComponent.PositionedGlyph).
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 
 public struct PositionedGlyph: Sendable {
     /// Outline in em units.

@@ -3,8 +3,7 @@
 // machine-generated and regular — <defs> glyph outlines, <g> transform
 // groups, <use> references, <rect> rules (fraction bars, \sqrt overlines).
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 
 public enum MathSVGError: Error, Equatable, Sendable {
     case notAnSVGDocument

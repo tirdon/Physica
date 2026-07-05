@@ -18,9 +18,7 @@
 // the push/morph lerp state they capture at clip begin. One file per family in
 // this directory; the shared `ContentArrivalTrack` seam lives below.
 
-import PhysicaMath
-import PhysicaGeometry
-import PhysicaKernel
+import PhysicaFoundation
 
 @MainActor
 public struct SlideTransition: Sendable {

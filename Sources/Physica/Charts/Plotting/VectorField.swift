@@ -3,8 +3,7 @@
 // `scene.play(field.plot { p in ... })` lerps them and rebuilds the arrows each
 // frame, so heads stay true mid-morph.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 import PhysicaKernel
 

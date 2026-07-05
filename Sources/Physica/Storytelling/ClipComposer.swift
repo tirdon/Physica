@@ -4,8 +4,7 @@
 
 /// Collects animations for the composer form of `scene.play { clip in ... }`.
 /// Each `add` keeps its own duration/offset/easing; everything lands in one clip.
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

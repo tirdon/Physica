@@ -10,8 +10,7 @@
 // is a tap. Hit-testing is painter's order, last-painted-wins, matching the
 // renderer so the entity on top is the one grabbed.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

@@ -1,8 +1,7 @@
 // Scene-relative placement targets: edges, corners, center.
 // `entity.move(to: .bottom)` resolves against the camera's visible rect at clip start.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public enum Unit: Sendable, Hashable, CaseIterable {

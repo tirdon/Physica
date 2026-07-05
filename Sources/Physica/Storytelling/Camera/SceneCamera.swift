@@ -12,8 +12,7 @@
 // self-referential — it's shadowed as unavailable; use `move(to: Position)`
 // or `focus(on:)`.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

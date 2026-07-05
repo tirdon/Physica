@@ -4,8 +4,7 @@
 // nothing remains at the end. The border is a transient entity: added when
 // the clip starts, removed when it completes (scrub-safe both ways).
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public extension Animation {

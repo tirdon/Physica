@@ -1,12 +1,10 @@
 import Foundation
 import Testing
-@testable import PhysicaMath
+@testable import PhysicaFoundation
 @testable import PhysicaAlgebra
-@testable import PhysicaGeometry
 @testable import PhysicaTypesetting
 @testable import PhysicaKernel
-@testable import PhysicaPlotting
-@testable import PhysicaStory
+@testable import PhysicaCharts
 @testable import PhysicaPhysics
 @testable import PhysicaEquationGame
 

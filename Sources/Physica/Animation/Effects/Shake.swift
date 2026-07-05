@@ -5,8 +5,7 @@
 // function of clip-local time that is exactly zero at both ends, so the entity
 // sits at its captured start position before the window and after it.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public extension Animation {

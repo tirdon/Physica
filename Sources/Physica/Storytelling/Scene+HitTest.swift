@@ -7,8 +7,7 @@
 // `worldPosition(normalizedViewport:)` (Input/Input.swift), so the editor can
 // place DOM overlays (selection box, handles) over a world-space entity.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 extension Scene {

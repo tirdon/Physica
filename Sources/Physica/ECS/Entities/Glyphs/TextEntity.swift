@@ -1,8 +1,7 @@
 // TextEntity + the Write animation (stroke draws to 85% of progress, then fill
 // fades in; glyphs stagger by lagRatio — the StoryboardWASM recipe, GPU-agnostic).
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public struct TextComponent: Component {

@@ -2,13 +2,11 @@
 // RendererError, GrowableBuffer (a resize-on-demand GPUBuffer), and GPU (WebGPU
 // usage/stage bit constants).
 
-import PhysicaMath
+import PhysicaFoundation
 import PhysicaAlgebra
-import PhysicaGeometry
 import PhysicaTypesetting
 import PhysicaKernel
-import PhysicaPlotting
-import PhysicaStory
+import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
 

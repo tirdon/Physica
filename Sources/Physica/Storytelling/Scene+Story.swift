@@ -12,8 +12,7 @@
 // one stored field this needs, `carriedThisSlide`, lives on `Scene` because Swift
 // extensions can't add stored properties.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 extension Scene {

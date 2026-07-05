@@ -7,71 +7,85 @@ let package = Package(
     name: "Physica",
 	platforms: [.macOS(.v26)],
 	products: [
+		// Three separately-importable products. `Physica` re-exports the whole
+		// framework (incl. the browser layer), so consumers keep one `import
+		// Physica`; `Typesetting` and `WASM` name the reusable sub-stacks.
 		.library(name: "Physica", targets: ["Physica"]),
-		// Example executables live under Sources/PhysicaDemo/{Example0,Example1}.
-		// SwiftPM exposes an implicit executable product for each, so
-		// PackageToJS can target them with `--product Example1` / `--product Example0`.
+		.library(name: "Typesetting", targets: ["Typesetting"]),
+		.library(name: "WASM", targets: ["WASM"]),
 	],
 	dependencies: [.package(url: "https://github.com/swiftwasm/JavaScriptKit.git", branch: "main" )],
     targets: [
-		// Layered library targets (REDESIGN.md Phase 5): directories ARE the
-		// layers, the compiler enforces the DAG, and the `Physica` umbrella
-		// re-exports everything so consumers keep a single `import Physica`.
-		// Phase 1 of the three-product redesign relocated these directories to
-		// the new tree (Foundation / Typesetting / Physica / WASM); the target
-		// NAMES are unchanged, so per-file imports stay valid.
-		.target(name: "PhysicaMath", path: "Sources/Foundation/Maths"),
+		// ---- Foundation (shared leaf: numeric atlas + geometry values) --------
+		// Below the Physica<->Typesetting cut so both can depend on it without a
+		// cycle. Maths (Real/quat/matrix/color/easing) + Geometry (Path/Mesh).
+		.target(
+			name: "PhysicaFoundation",
+			path: "Sources/Foundation",
+			sources: ["Maths", "Geometry"]
+		),
+
+		// ---- Typesetting product (Algebra + Font/MathSVG parsers + Literals) --
 		.target(name: "PhysicaAlgebra", path: "Sources/Typesetting/Algebra"),
 		.target(
-			name: "PhysicaGeometry",
-			dependencies: ["PhysicaMath"],
-			path: "Sources/Foundation/Geometry"
+			name: "PhysicaTypesetting",
+			dependencies: ["PhysicaFoundation"],
+			path: "Sources/Typesetting",
+			exclude: ["Algebra", "Umbrella"]
 		),
 		.target(
-			name: "PhysicaTypesetting",
-			dependencies: ["PhysicaMath", "PhysicaGeometry"],
-			path: "Sources/Typesetting",
-			exclude: ["Algebra"]
+			name: "Typesetting",
+			dependencies: ["PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting"],
+			path: "Sources/Typesetting/Umbrella"
 		),
+
+		// ---- Physica product --------------------------------------------------
 		// The mutually-coupled core: object model + animation machinery +
-		// scene/camera/snapshot + entity kinds + interaction. One target on
-		// purpose — Scene and Animation call into each other by design.
+		// scene/camera/snapshot/story + entity kinds + interaction. One target on
+		// purpose — Scene, Animation and Story call into each other by design.
 		.target(
 			name: "PhysicaKernel",
 			// Algebra rides in for the drag vocabulary (DragPayload carries
 			// Expression/ProjectionAxis) — a pre-existing domain edge.
-			dependencies: ["PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting"],
+			dependencies: ["PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting"],
 			path: "Sources/Physica",
+			exclude: ["Charts", "Helpers", "EquationGame", "Umbrella"],
 			sources: ["Animation", "ECS", "Interactions", "Storytelling"]
 		),
 		.target(
-			name: "PhysicaPlotting",
-			dependencies: ["PhysicaMath", "PhysicaGeometry", "PhysicaTypesetting", "PhysicaKernel"],
-			path: "Sources/Physica/Charts/Plotting"
-		),
-		.target(
-			name: "PhysicaStory",
-			dependencies: ["PhysicaMath", "PhysicaGeometry", "PhysicaKernel"],
-			path: "Sources/Physica/Story"
+			name: "PhysicaCharts",
+			dependencies: ["PhysicaFoundation", "PhysicaTypesetting", "PhysicaKernel"],
+			path: "Sources/Physica/Charts"
 		),
 		.target(
 			name: "PhysicaPhysics",
-			dependencies: ["PhysicaMath", "PhysicaGeometry", "PhysicaKernel"],
+			dependencies: ["PhysicaFoundation", "PhysicaKernel"],
 			path: "Sources/Physica/Helpers/Physics"
 		),
 		.target(
 			name: "PhysicaEquationGame",
-			dependencies: ["PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting", "PhysicaKernel"],
+			dependencies: ["PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting", "PhysicaKernel"],
 			path: "Sources/Physica/EquationGame"
 		),
-		// Browser glue + WebGPU renderer — every file `#if os(WASI)`; the sole
-		// JavaScriptKit dependency, still conditional so host builds stay clean.
+		// Umbrella: `@_exported import` of every layer.
+		.target(
+			name: "Physica",
+			dependencies: [
+				"PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting",
+				"PhysicaKernel", "PhysicaCharts", "PhysicaPhysics",
+				"PhysicaEquationGame", "PhysicaWeb",
+			],
+			path: "Sources/Physica/Umbrella"
+		),
+
+		// ---- WASM product (browser glue + WebGPU renderer + document DSL) -----
+		// Every file `#if os(WASI)`; the sole JavaScriptKit dependency, still
+		// conditional so host builds stay clean.
 		.target(
 			name: "PhysicaWeb",
 			dependencies: [
-				"PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting",
-				"PhysicaKernel", "PhysicaPlotting", "PhysicaStory", "PhysicaPhysics",
-				"PhysicaEquationGame",
+				"PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting",
+				"PhysicaKernel", "PhysicaCharts", "PhysicaPhysics", "PhysicaEquationGame",
 				.product(
 					name: "JavaScriptKit", package: "JavaScriptKit",
 					condition: .when(platforms: [.wasi])
@@ -81,25 +95,21 @@ let package = Package(
 					condition: .when(platforms: [.wasi])
 				),
 			],
-			path: "Sources/WASM"
+			path: "Sources/WASM",
+			exclude: ["Umbrella"]
 		),
-		// Umbrella: `@_exported import` of every layer.
 		.target(
-			name: "Physica",
-			dependencies: [
-				"PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting",
-				"PhysicaKernel", "PhysicaPlotting", "PhysicaStory", "PhysicaPhysics",
-				"PhysicaEquationGame", "PhysicaWeb",
-			],
-			path: "Sources/Physica/Umbrella"
+			name: "WASM",
+			dependencies: ["PhysicaWeb"],
+			path: "Sources/WASM/Umbrella"
 		),
+
         .testTarget(
             name: "PhysicaTests",
             dependencies: [
 				"Physica",
-				"PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting",
-				"PhysicaKernel", "PhysicaPlotting", "PhysicaStory", "PhysicaPhysics",
-				"PhysicaEquationGame",
+				"PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting",
+				"PhysicaKernel", "PhysicaCharts", "PhysicaPhysics", "PhysicaEquationGame",
 			]
         ),
 

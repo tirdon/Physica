@@ -2,8 +2,7 @@
 // `streamlines { }` build the sampled entities (see Graph/VectorField/Streamlines)
 // in the plane's space, plus the shared lattice/integration helpers they sample with.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 import PhysicaKernel
 

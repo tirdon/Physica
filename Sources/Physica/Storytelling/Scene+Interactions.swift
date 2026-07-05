@@ -3,8 +3,7 @@
 // and outside the scrub history. Pairs with InteractionRunner; shares bakeClip
 // with `play` so both filter consumed pairs identically.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 extension Scene {

@@ -2,8 +2,7 @@
 // plane-local coordinates). Graphs and streamlines build on it; `PolylineMorphTrack`
 // lerps the sample points, which is what makes their data animatable.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 import PhysicaKernel
 

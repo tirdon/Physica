@@ -4,8 +4,7 @@
 
 // MARK: - Generic property track
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

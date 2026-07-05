@@ -3,8 +3,7 @@
 // Components are plain values confined to MainActor entities, so the protocol has
 // no Sendable requirement — UpdaterComponent legally stores @MainActor closures.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 public protocol Component {

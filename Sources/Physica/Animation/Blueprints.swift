@@ -4,8 +4,7 @@
 // bake them into tracks at enqueue time, and tracks capture start values lazily at
 // first playback so sequential clips compose.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

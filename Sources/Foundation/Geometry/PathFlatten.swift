@@ -1,7 +1,6 @@
 // Path flattening with deterministic subdivision counts (stable for tests and
 // morph topology), plus arc-length resampling used by morphs and Write reveals.
 
-import PhysicaMath
 
 public struct FlattenedContour: Sendable, Equatable {
     public var points: [SIMD2<Real>]

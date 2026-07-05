@@ -2,8 +2,7 @@
 // The platform layer (wasm executable) drives `tick` from requestAnimationFrame,
 // feeds visibility from IntersectionObserver, and toggles the Shift debug overlay.
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

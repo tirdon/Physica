@@ -11,8 +11,7 @@
 
 // MARK: - Geometry helpers
 
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

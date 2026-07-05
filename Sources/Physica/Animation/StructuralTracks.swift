@@ -5,8 +5,7 @@
 // MARK: - Structural tracks
 
 /// 0-duration track that adds entities (and on rewind, removes them again).
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 import PhysicaTypesetting
 
 @MainActor

@@ -5,8 +5,7 @@
 
 /// Minimal markup scanner: yields opening/closing tags with attributes,
 /// skips text content, comments, <!doctype> and <?...?> blocks.
-import PhysicaMath
-import PhysicaGeometry
+import PhysicaFoundation
 
 struct TagScanner {
     struct Tag {
