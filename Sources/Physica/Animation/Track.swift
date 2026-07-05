@@ -8,18 +8,6 @@ import PhysicaMath
 import PhysicaGeometry
 import PhysicaTypesetting
 
-public struct Keyframe<Value: Interpolatable>: Sendable where Value: Sendable {
-    public var time: TimeInterval
-    public var value: Value
-    public var easing: Easing
-
-    public init(time: TimeInterval, value: Value, easing: Easing = .smooth) {
-        self.time = time
-        self.value = value
-        self.easing = easing
-    }
-}
-
 @MainActor
 public protocol AnimationTrackProtocol: AnyObject {
     /// Active duration in seconds (excluding `offset`).

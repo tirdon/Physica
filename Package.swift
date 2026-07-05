@@ -17,17 +17,21 @@ let package = Package(
 		// Layered library targets (REDESIGN.md Phase 5): directories ARE the
 		// layers, the compiler enforces the DAG, and the `Physica` umbrella
 		// re-exports everything so consumers keep a single `import Physica`.
-		.target(name: "PhysicaMath", path: "Sources/Physica/Math"),
-		.target(name: "PhysicaAlgebra", path: "Sources/Physica/Algebra"),
+		// Phase 1 of the three-product redesign relocated these directories to
+		// the new tree (Foundation / Typesetting / Physica / WASM); the target
+		// NAMES are unchanged, so per-file imports stay valid.
+		.target(name: "PhysicaMath", path: "Sources/Foundation/Maths"),
+		.target(name: "PhysicaAlgebra", path: "Sources/Typesetting/Algebra"),
 		.target(
 			name: "PhysicaGeometry",
 			dependencies: ["PhysicaMath"],
-			path: "Sources/Physica/Geometry"
+			path: "Sources/Foundation/Geometry"
 		),
 		.target(
 			name: "PhysicaTypesetting",
 			dependencies: ["PhysicaMath", "PhysicaGeometry"],
-			path: "Sources/Physica/Typesetting"
+			path: "Sources/Typesetting",
+			exclude: ["Algebra"]
 		),
 		// The mutually-coupled core: object model + animation machinery +
 		// scene/camera/snapshot + entity kinds + interaction. One target on
@@ -38,12 +42,12 @@ let package = Package(
 			// Expression/ProjectionAxis) — a pre-existing domain edge.
 			dependencies: ["PhysicaMath", "PhysicaAlgebra", "PhysicaGeometry", "PhysicaTypesetting"],
 			path: "Sources/Physica",
-			sources: ["ECS", "Animation", "Scene", "Entities", "Interaction"]
+			sources: ["Animation", "ECS", "Interactions", "Storytelling"]
 		),
 		.target(
 			name: "PhysicaPlotting",
 			dependencies: ["PhysicaMath", "PhysicaGeometry", "PhysicaTypesetting", "PhysicaKernel"],
-			path: "Sources/Physica/Plotting"
+			path: "Sources/Physica/Charts/Plotting"
 		),
 		.target(
 			name: "PhysicaStory",
@@ -53,7 +57,7 @@ let package = Package(
 		.target(
 			name: "PhysicaPhysics",
 			dependencies: ["PhysicaMath", "PhysicaGeometry", "PhysicaKernel"],
-			path: "Sources/Physica/Physics"
+			path: "Sources/Physica/Helpers/Physics"
 		),
 		.target(
 			name: "PhysicaEquationGame",
@@ -77,7 +81,7 @@ let package = Package(
 					condition: .when(platforms: [.wasi])
 				),
 			],
-			path: "Sources/Physica/WASM"
+			path: "Sources/WASM"
 		),
 		// Umbrella: `@_exported import` of every layer.
 		.target(

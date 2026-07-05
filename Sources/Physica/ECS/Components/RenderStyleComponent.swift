@@ -1,21 +1,10 @@
-// Built-in components shared by every entity kind. (The pure values they wrap
-// live below the kernel: Transform in PhysicaMath, Bounds in PhysicaGeometry.)
+// Fill/stroke styling consumed by the snapshot pass, plus the procedural
+// texture/cap enums it carries. TransformComponent lives alongside in
+// TransformComponent.swift.
 
 import PhysicaMath
 import PhysicaGeometry
 import PhysicaTypesetting
-
-// MARK: - Built-in components
-
-public struct TransformComponent: Component {
-    public var transform: Transform
-
-    public init(transform: Transform = .identity) {
-        self.transform = transform
-    }
-
-    public var debugString: String { transform.debugDescription }
-}
 
 /// Procedural grain the renderer applies to a path's fill and stroke.
 /// World-anchored noise — it sticks to the geometry, not the screen.
