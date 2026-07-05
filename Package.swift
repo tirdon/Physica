@@ -130,6 +130,19 @@ let package = Package(
 				],
 			path: "Sources/PhysicaDemo/Example0"
         ),
+			// Example3 — a Medium-style scientific article rendered to the browser
+			// DOM (no WebGPU scene): a declarative result-builder DSL over a pure
+			// value document model, walked by a WASI-only DOM renderer. Own bundle
+			// dir js-example3/, shell example3.html, GPU-free check smoke-example3.mjs.
+        .executableTarget(
+            name: "Example3",
+				dependencies: [
+					.product(name: "JavaScriptKit", package: "JavaScriptKit"),
+					.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
+					.target(name: "Physica")
+					],
+				path: "Sources/PhysicaDemo/Example3"
+        ),
 
 			// Story Studio — a standalone wasm WYSIWYG storytelling-authoring app
 			// (its own scene + bundle dir js-studio/, shell studio.html). Clones the

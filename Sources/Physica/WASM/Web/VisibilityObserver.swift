@@ -18,7 +18,13 @@ final class VisibilityObserver {
     private var closure: JSClosure?
     private var observer: JSValue = .undefined
 
-    init(engine: Engine, canvas: JSValue, sceneID: UInt64) {
+    /// `onChange`, if given, fires alongside the engine visibility toggle on every
+    /// observed change (including the initial one) — e.g. an article deck using it
+    /// to defer its first reveal until it's actually scrolled into view.
+    init(
+        engine: Engine, canvas: JSValue, sceneID: UInt64,
+        onChange: (@MainActor (Bool) -> Void)? = nil
+    ) {
         let closure = JSClosure { arguments in
             let entries = arguments.first ?? .undefined
             MainActor.assumeIsolated {
@@ -27,6 +33,7 @@ final class VisibilityObserver {
                     let entry = entries[index]
                     let visible = entry.isIntersecting.boolean ?? true
                     engine.setVisibility(visible, forSceneID: sceneID)
+                    onChange?(visible)
                 }
             }
             return .undefined
