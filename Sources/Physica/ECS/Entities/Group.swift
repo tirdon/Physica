@@ -56,8 +56,9 @@ open class Group: Entity, HasHierarchy {
 
     /// Re-inserts a child at a specific slot (painter's order among siblings) —
     /// scrub rewinds restoring a removed child use this to land it back where
-    /// it was.
-    func insertChild(_ entity: Entity, at index: Int) {
+    /// it was. (`package`: the chart element tracks in PhysicaCharts restore
+    /// their removed bars/wedges through it too.)
+    package func insertChild(_ entity: Entity, at index: Int) {
         guard entity !== self, entity.parent !== self else { return }
         entity.parent = self
         if scene != nil { entity.scene = scene }

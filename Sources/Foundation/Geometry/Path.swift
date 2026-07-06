@@ -109,8 +109,33 @@ public struct Path: Sendable, Equatable {
     public static func arc(
         center: SIMD2<Real>, radius: Real, startAngle: Real, endAngle: Real
     ) -> Path {
+        guard let arc = arcRun(center: center, radius: radius, startAngle: startAngle, endAngle: endAngle) else {
+            return Path()
+        }
+        return Path(contours: [Contour(start: arc.start, segments: arc.segments, isClosed: false)])
+    }
+
+    /// Circular sector (pie wedge): center → arc from `startAngle` to
+    /// `endAngle` → closed back to the center. A ~zero sweep yields an empty
+    /// path (a vanished wedge), which keeps grow/shrink morphs endpoint-exact.
+    public static func sector(
+        center: SIMD2<Real>, radius: Real, startAngle: Real, endAngle: Real
+    ) -> Path {
+        guard let arc = arcRun(center: center, radius: radius, startAngle: startAngle, endAngle: endAngle) else {
+            return Path()
+        }
+        var segments: [Segment] = [.line(to: arc.start)]
+        segments.append(contentsOf: arc.segments)
+        return Path(contours: [Contour(start: center, segments: segments, isClosed: true)])
+    }
+
+    /// Shared cubic-arc run for `arc`/`sector`; nil when the sweep is ~zero.
+    /// Standard approximation: control distance = 4/3 · tan(θ/4) · r per ≤90° piece.
+    private static func arcRun(
+        center: SIMD2<Real>, radius: Real, startAngle: Real, endAngle: Real
+    ) -> (start: SIMD2<Real>, segments: [Segment])? {
         let total = endAngle - startAngle
-        guard Swift.abs(total) > 1e-6 else { return Path() }
+        guard Swift.abs(total) > 1e-6 else { return nil }
         let segmentCount = Swift.max(1, Int((Swift.abs(total) / (Real.pi / 2)).rounded(.up)))
         let step = total / Real(segmentCount)
 
@@ -119,7 +144,6 @@ public struct Path: Sendable, Equatable {
         }
 
         var segments: [Segment] = []
-        // Standard cubic arc approximation: control distance = 4/3 · tan(θ/4) · r.
         let control = 4 / 3 * Real.tan(step / 4) * radius
         for index in 0..<segmentCount {
             let a0 = startAngle + Real(index) * step
@@ -130,7 +154,7 @@ public struct Path: Sendable, Equatable {
             let c2 = SIMD2(p3.x + control * Real.sin(a1), p3.y - control * Real.cos(a1))
             segments.append(.curve(control1: c1, control2: c2, to: p3))
         }
-        return Path(contours: [Contour(start: point(startAngle), segments: segments, isClosed: false)])
+        return (point(startAngle), segments)
     }
 
     // MARK: Transform / merge

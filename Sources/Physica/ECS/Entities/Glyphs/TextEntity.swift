@@ -66,11 +66,25 @@ public final class TextEntity: Entity {
         self.text = text
         super.init()
 
+        components[TextComponent.self] = TextComponent(
+            glyphs: Self.layoutGlyphs(text, font: font), fontSize: fontSize
+        )
+        components[RenderStyleComponent.self] = RenderStyleComponent(
+            color: color,
+            strokeColor: color,
+            strokeWidth: 0.012 * fontSize,
+            isFilled: true
+        )
+        name = text
+    }
+
+    /// The shared glyph layout (also reglyphs `TrackingTextEntity` per frame):
+    /// glyphs laid out line by line (newlines break a line), each line centred
+    /// by its own width, the stack centred vertically.
+    static func layoutGlyphs(_ text: String, font: Font) -> [TextComponent.PositionedGlyph] {
         let spaceAdvance = font.glyph(for: " ")?.advance ?? 0.3
         let lineHeight: Real = 1.2
 
-        // Lay glyphs out line by line (newlines break a line), tracking each line's
-        // [start, end) glyph range and width so lines centre individually.
         var glyphs: [TextComponent.PositionedGlyph] = []
         var lines: [(start: Int, end: Int, width: Real)] = []
         var pen: Real = 0
@@ -106,15 +120,7 @@ public final class TextEntity: Entity {
                 glyphs[index].offset.y += centerY
             }
         }
-
-        components[TextComponent.self] = TextComponent(glyphs: glyphs, fontSize: fontSize)
-        components[RenderStyleComponent.self] = RenderStyleComponent(
-            color: color,
-            strokeColor: color,
-            strokeWidth: 0.012 * fontSize,
-            isFilled: true
-        )
-        name = text
+        return glyphs
     }
 
     /// Test/internal hook: inject pre-built glyphs without a font file.

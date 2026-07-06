@@ -85,6 +85,72 @@ public extension Plane {
         return streamlines
     }
 
+    /// Filled region between `function` and `baseline` (area chart). Same
+    /// sampling as `graph(of:)`; re-plot with `area.plot { ... }`.
+    @discardableResult
+    func area(
+        of function: (Real) -> Real,
+        samples: Int = 160,
+        baseline: Real = 0,
+        color: Color = .teal,
+        opacity: Real = 0.35
+    ) -> Area {
+        let count = Swift.max(samples, 2)
+        let xs = (0..<count).map { index in
+            xRange.lowerBound
+                + (xRange.upperBound - xRange.lowerBound) * Real(index) / Real(count - 1)
+        }
+        let points = xs.map { localPoint($0, plotY(function($0))) }
+        let area = Area(
+            plane: self, sampleXs: xs, lines: [points],
+            baseline: baseline, color: color, opacity: opacity
+        )
+        registerPlot(area)
+        return area
+    }
+
+    /// Point cloud (scatter chart). Points are data coordinates; re-plot with
+    /// `scatter.plot(newPoints)` and the markers glide to their new places.
+    @discardableResult
+    func scatter(
+        _ points: [SIMD2<Real>],
+        markerRadius: Real = 0.07,
+        color: Color = .yellow
+    ) -> Scatter {
+        let line = points.map { localPoint($0.x, plotY($0.y)) }
+        let scatter = Scatter(
+            plane: self, lines: [line], markerRadius: markerRadius, color: color
+        )
+        registerPlot(scatter)
+        return scatter
+    }
+
+    /// Parametric curve (x(t), y(t)) sampled uniformly over `t`, clipped to the
+    /// board on both axes. Re-plot with `parametric.plot { t in ... }`.
+    @discardableResult
+    func parametric(
+        t range: ClosedRange<Real>,
+        samples: Int = 200,
+        color: Color = .yellow,
+        width: Real = 0.025,
+        _ function: (Real) -> SIMD2<Real>
+    ) -> Parametric {
+        let count = Swift.max(samples, 2)
+        let ts = (0..<count).map { index in
+            range.lowerBound
+                + (range.upperBound - range.lowerBound) * Real(index) / Real(count - 1)
+        }
+        let points = ts.map { t -> SIMD2<Real> in
+            let p = Self.sanitized(function(t))
+            return localPoint(p.x, plotY(p.y))
+        }
+        let parametric = Parametric(
+            plane: self, sampleTs: ts, lines: [points], color: color, width: width
+        )
+        registerPlot(parametric)
+        return parametric
+    }
+
     // MARK: Sampling helpers
 
     /// Lattice of data-space sample points; `centered` offsets by half a step
