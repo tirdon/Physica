@@ -90,14 +90,34 @@ public struct MeshDraw: Sendable {
     }
 }
 
+/// An image glyph (an emoji cluster in a text run): the geometry consumer
+/// skips these; the web runtime's DOM emoji layer renders them (native color
+/// emoji) projected over the canvas, fading with `opacity` during a write.
+public struct ImagePrimitive: Sendable {
+    /// The character cluster to rasterize.
+    public var text: String
+    /// World-space center of the glyph box.
+    public var center: Position
+    /// World-space box size (width, height).
+    public var size: SIMD2<Real>
+    /// Resolved opacity (entity style × per-glyph × write fade).
+    public var opacity: Real
+
+    public var debugString: String {
+        "image['\(text)' \(fmt(opacity, decimals: 2))]"
+    }
+}
+
 public enum RenderPrimitive: Sendable {
     case path(PathPrimitive)
     case mesh(MeshDraw)
+    case image(ImagePrimitive)
 
     public var debugString: String {
         switch self {
         case .path(let path): return path.debugString
         case .mesh(let mesh): return mesh.debugString
+        case .image(let image): return image.debugString
         }
     }
 }
@@ -245,6 +265,30 @@ extension Scene {
                     lagRatio: text.lagRatio
                 )
                 guard factors.stroke > 0.0001 else { continue }
+
+                // Image glyphs (emoji) fade in over the glyph's write window
+                // instead of stroke-then-fill; the DOM emoji layer draws them.
+                if let image = glyph.image {
+                    let glyphOpacity = Real(opacity) * glyph.opacity * factors.stroke
+                    // Box in local units: sits on the baseline at the pen
+                    // offset, `size` em wide/tall (roughly cap-height aligned).
+                    let half = image.size * text.fontSize / 2
+                    let localCenter = SIMD2(
+                        glyph.offset.x * text.fontSize + half.x,
+                        glyph.offset.y * text.fontSize + half.y * 0.72
+                    )
+                    let center = world.applying(to: Position(localCenter.x, localCenter.y, 0))
+                    // World size via a probe along +x (uniform glyph scale).
+                    let probe = world.applying(to: Position(localCenter.x + 1, localCenter.y, 0))
+                    let unit = probe.distance(to: center)
+                    primitives.append(.image(ImagePrimitive(
+                        text: image.text,
+                        center: center,
+                        size: image.size * text.fontSize * unit,
+                        opacity: glyphOpacity
+                    )))
+                    continue
+                }
 
                 let localPath = glyph.path.translated(by: glyph.offset).scaled(by: text.fontSize)
                 let contours = localPath.flattened().map { contour in

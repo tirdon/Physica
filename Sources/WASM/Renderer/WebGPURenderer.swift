@@ -45,6 +45,10 @@ final class WebGPURenderer: RenderBackend {
     private var width = 0
     private var height = 0
 
+    /// DOM overlay for image glyphs (emoji) — set by the web runtimes; synced
+    /// each frame with the view-projection this renderer draws with.
+    var emojiLayer: EmojiLayer?
+
     var aspectRatio: Real {
         height > 0 ? Real(width) / Real(height) : 1.6
     }
@@ -333,6 +337,10 @@ final class WebGPURenderer: RenderBackend {
 
         // Globals: projection (with live aspect) × view.
         let viewProjection = snapshot.camera.projection * snapshot.camera.view
+
+        // Image glyphs (emoji) draw in the DOM emoji layer, projected with the
+        // same matrices this frame renders with; the uploader skips them.
+        emojiLayer?.sync(snapshot, viewProjection: viewProjection)
         _ = device.queue.writeBuffer(
             globalsBuffer, 0, JSTypedArray<Float32>(viewProjection.floatArray).jsValue
         )

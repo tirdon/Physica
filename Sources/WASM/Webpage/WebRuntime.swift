@@ -50,6 +50,7 @@ public final class WebRuntime {
             )
 
             let canvas: JSValue = JSObject.global.document.getElementById(canvasID)
+            renderer.emojiLayer = EmojiLayer(canvas: canvas, hostID: overlayHostID)
             runtime.controls = PlaybackControls(scene: scene)
             runtime.inputBindings = InputBindings(engine: engine, scene: scene, canvas: canvas)
             runtime.visibilityObserver = VisibilityObserver(

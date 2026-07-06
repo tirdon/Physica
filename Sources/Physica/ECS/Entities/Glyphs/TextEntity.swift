@@ -80,10 +80,13 @@ public final class TextEntity: Entity {
 
     /// The shared glyph layout (also reglyphs `TrackingTextEntity` per frame):
     /// glyphs laid out line by line (newlines break a line), each line centred
-    /// by its own width, the stack centred vertically.
+    /// by its own width, the stack centred vertically. Emoji clusters become
+    /// **image glyphs** (the outline font can't draw them) — during a write
+    /// they fade in instead of stroke-then-fill.
     static func layoutGlyphs(_ text: String, font: Font) -> [TextComponent.PositionedGlyph] {
         let spaceAdvance = font.glyph(for: " ")?.advance ?? 0.3
         let lineHeight: Real = 1.2
+        let emojiAdvance: Real = 1.05
 
         var glyphs: [TextComponent.PositionedGlyph] = []
         var lines: [(start: Int, end: Int, width: Real)] = []
@@ -96,17 +99,27 @@ public final class TextEntity: Entity {
             pen = 0
             penY -= lineHeight
         }
-        for character in text.unicodeScalars {
-            if character == "\n" { closeLine(); continue }
-            if character == " " { pen += spaceAdvance; continue }
-            guard let glyph = font.glyph(for: character) else {
-                pen += 0.5
+        for cluster in text {
+            if cluster == "\n" { closeLine(); continue }
+            if cluster == " " { pen += spaceAdvance; continue }
+            if Self.isEmojiCluster(cluster) {
+                glyphs.append(TextComponent.PositionedGlyph(
+                    path: Path(), offset: SIMD2(pen, penY),
+                    image: GlyphImage(text: String(cluster))
+                ))
+                pen += emojiAdvance
                 continue
             }
-            if !glyph.path.isEmpty {
-                glyphs.append(TextComponent.PositionedGlyph(path: glyph.path, offset: SIMD2(pen, penY)))
+            for character in cluster.unicodeScalars {
+                guard let glyph = font.glyph(for: character) else {
+                    pen += 0.5
+                    continue
+                }
+                if !glyph.path.isEmpty {
+                    glyphs.append(TextComponent.PositionedGlyph(path: glyph.path, offset: SIMD2(pen, penY)))
+                }
+                pen += glyph.advance
             }
-            pen += glyph.advance
         }
         closeLine()
 
@@ -121,6 +134,22 @@ public final class TextEntity: Entity {
             }
         }
         return glyphs
+    }
+
+    /// Whether a grapheme cluster is an emoji (rendered as an image glyph):
+    /// default emoji presentation, an explicit VS16 selector, a ZWJ family
+    /// sequence, or anything in the supplementary emoji blocks. Stdlib-only —
+    /// no Foundation in the core.
+    static func isEmojiCluster(_ cluster: Character) -> Bool {
+        guard let first = cluster.unicodeScalars.first else { return false }
+        if first.properties.isEmojiPresentation { return true }
+        if first.properties.isEmoji {
+            // Text-default emoji scalars (digits, ©, ↔) only render as emoji
+            // with an explicit VS16 or as part of a multi-scalar sequence.
+            if cluster.unicodeScalars.contains(where: { $0.value == 0xFE0F }) { return true }
+            if first.value >= 0x1F000 { return true }
+        }
+        return false
     }
 
     /// Test/internal hook: inject pre-built glyphs without a font file.

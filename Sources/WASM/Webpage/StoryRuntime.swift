@@ -116,6 +116,7 @@ public final class StoryRuntime {
             engine.bind(renderer, to: runtime.scene)
             _ = console.log("Physica: scene size", Double(runtime.scene.size.x), "×", Double(runtime.scene.size.y))
 
+            renderer.emojiLayer = EmojiLayer(canvas: runtime.canvas, hostID: overlayHostID)
             runtime.inputBindings = InputBindings(engine: engine, scene: runtime.scene, canvas: runtime.canvas)
             runtime.installTouchGestures()
             runtime.visibilityObserver = VisibilityObserver(engine: engine, canvas: runtime.canvas, sceneID: runtime.scene.id)
