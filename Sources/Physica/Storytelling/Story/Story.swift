@@ -14,7 +14,7 @@
 /// any duration); zero-duration clips collapse into the surrounding boundary.
 import PhysicaFoundation
 
-public struct Slide: Sendable, Equatable {
+public struct SlideRecord: Sendable, Equatable {
     public let index: Int
     public let title: String
     public let startTime: TimeInterval
@@ -79,7 +79,7 @@ public struct StoryOptions: Sendable {
 public final class Story {
     public let scene: Scene
     public var options: StoryOptions
-    public private(set) var slides: [Slide] = []
+    public private(set) var slides: [SlideRecord] = []
     private var actions: [StoryAction] = []
 
     // Story content is **slide-scoped by default**: each slide's own-introduced
@@ -139,7 +139,7 @@ public final class Story {
         _ title: String,
         transition: SlideTransition = .none,
         _ content: (Scene) -> Void
-    ) -> Slide {
+    ) -> SlideRecord {
         let isEntrance = transition.isContentEntrance
 
         // The *previous* slide's deferred auto-clear. A normal slide fires it now,
@@ -213,7 +213,7 @@ public final class Story {
             }
         }
 
-        let slide = Slide(
+        let slide = SlideRecord(
             index: slides.count, title: title,
             startTime: startTime, endTime: endTime,
             stepBoundaries: boundaries, deferredClear: !pendingAutoClear.isEmpty,
@@ -311,7 +311,7 @@ public final class Story {
     }
 
     /// Scroll-spacer height for one slide.
-    public func slideScrollPixels(_ slide: Slide) -> Real {
+    public func slideScrollPixels(_ slide: SlideRecord) -> Real {
         Swift.max(options.minimumSlidePixels, options.pixelsPerSecond * Real(slide.duration))
     }
 

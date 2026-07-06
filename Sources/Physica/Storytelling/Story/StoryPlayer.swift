@@ -100,7 +100,7 @@ public final class StoryPlayer {
     /// content, in which case a rest is kept one `boundaryNudge` before the
     /// boundary (so the slide shows fully built before it clears). The last slide
     /// keeps its true end (nothing follows to clear it).
-    private static func buildBeats(from slides: [Slide]) -> [Beat] {
+    private static func buildBeats(from slides: [SlideRecord]) -> [Beat] {
         var beats: [Beat] = []
         for slide in slides {
             let steps = slide.stepBoundaries
@@ -134,7 +134,7 @@ public final class StoryPlayer {
     /// Fully-built end rest time per slide (see `slideEndRestTimes`). Mirrors
     /// `buildBeats`: a non-last deferred-clear slide rests `boundaryNudge` before
     /// its end; the last slide keeps its true end even if it auto-built content.
-    private static func buildSlideEndRestTimes(from slides: [Slide]) -> [TimeInterval] {
+    private static func buildSlideEndRestTimes(from slides: [SlideRecord]) -> [TimeInterval] {
         let lastIndex = slides.count - 1
         return slides.map { slide in
             // Mirror `buildBeats`: rest one nudge before the end for a non-last
