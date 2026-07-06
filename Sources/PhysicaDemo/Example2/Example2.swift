@@ -1,10 +1,10 @@
-// Example2 — a standalone Physica *story* (slide mode): the pendulum equation
-// game. A four-slide scrollytelling demo where the viewer resolves forces on a
+// Example2 — the pendulum equation game on the `Storytelling` facade: a
+// four-slide scrollytelling story where the viewer resolves forces on a
 // mass-on-a-string, drags projection operators onto a vector equation, and
-// watches the small-angle approximation animate. See EquationStoryDemo.swift for
-// the scene script.
+// watches the small-angle approximation animate. The rich story script lives
+// in EquationStoryDemo.swift, unchanged from the pre-facade demo.
 //
-// Build its bundle (separate output dir so it doesn't clobber other examples):
+// Build its bundle:
 //   swift package --swift-sdk 6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads \
 //     --allow-writing-to-directory js-example2 js --use-cdn \
 //     --output js-example2 --product Example2
@@ -17,56 +17,46 @@ import JavaScriptKit
 import JavaScriptEventLoop
 import Physica
 
+// Interactive equation-game story
 @main
-struct Example2App {
-    // Retained for the lifetime of the page so the rAF loop / listeners stay live.
-    @MainActor static var runtime: StoryRuntime?
+struct Example2 {
+    /// The game wires drop targets/win state and must outlive the mount.
     @MainActor static var game: EquationGame?
 
     static func main() {
         JavaScriptEventLoop.installGlobalExecutor()
         Task { @MainActor in
-            await boot()
+            // Load MathJax up front (async); the provider choice happens inside
+            // the story script, after the facade has filled the FontBook.
+            var mathJaxReady = true
+            do {
+                try await MathJaxLoader.load()
+            } catch {
+                mathJaxReady = false
+                _ = JSObject.global.console.warn(
+                    "Example2: MathJax unavailable —", String(describing: error)
+                )
+            }
+
+            Storytelling(name: "equation-story", story: { story in
+                // Equation tokens render with MathJax when available, otherwise
+                // the loaded font, otherwise stub boxes.
+                let font = FontBook.resolve(.body).font
+                let provider: TokenGlyphProvider = mathJaxReady
+                    ? MathJaxTokenProvider()
+                    : (font.map { FontTokenGlyphProvider(font: $0) } ?? StubTokenGlyphProvider())
+                game = EquationStoryDemo.build(story, font: font, provider: provider)
+            })
         }
-    }
-
-    @MainActor
-    static func boot() async {
-        let console = JSObject.global.console
-
-        let font: Font?
-        do {
-            font = try await FontLoader.load()
-        } catch {
-            font = nil
-            _ = console.warn("Example2: font unavailable —", String(describing: error))
-        }
-
-        // Equation tokens render with MathJax when available, otherwise a font,
-        // otherwise stub boxes — the story still works, just less pretty.
-        let provider: TokenGlyphProvider
-        do {
-            try await MathJaxLoader.load()
-            provider = MathJaxTokenProvider()
-        } catch {
-            _ = console.warn("Example2: MathJax unavailable —", String(describing: error))
-            provider = font.map { FontTokenGlyphProvider(font: $0) } ?? StubTokenGlyphProvider()
-        }
-
-        let engine = Engine()
-        let scene = engine.makeScene(name: "equation-story") { _ in }
-        let story = Story(scene: scene)
-        game = EquationStoryDemo.build(story, font: font, provider: provider)
-        runtime = await StoryRuntime.run(engine: engine, story: story)
     }
 }
 
 #else
 
 @main
-struct Example2App {
+struct Example2 {
     static func main() {
-        print("Example2 is a wasm story; build with:")
+        print("Example2 is the wasm equation-game story; build with:")
         print("swift package --swift-sdk 6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads --allow-writing-to-directory js-example2 js --use-cdn --output js-example2 --product Example2")
     }
 }

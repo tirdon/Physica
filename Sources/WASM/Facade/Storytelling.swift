@@ -53,18 +53,41 @@ public struct Storytelling {
         }
     }
 
+    /// Story mode, script form: full access to the `Story` (captions, actions,
+    /// carry/clear) for rich scrollytelling scripts — the labeled-closure
+    /// counterpart of the `Slide(...)` builder:
+    /// `Storytelling(story: { story in WaveStory.build(story) })`.
+    @discardableResult
+    public init(
+        name: String = "story",
+        options: StoryOptions = StoryOptions(),
+        story configure: @escaping @MainActor (Story) -> Void
+    ) {
+        Task { @MainActor in
+            await Storytelling.mount(name: name, options: options, configure: configure)
+        }
+    }
+
     // MARK: Mounts
 
     private static func mount(
         name: String, options: StoryOptions, slides: @MainActor () -> [SlideSpec]
     ) async {
+        await mount(name: name, options: options) { story in
+            for spec in slides() {
+                story.slide(spec)
+            }
+        }
+    }
+
+    private static func mount(
+        name: String, options: StoryOptions, configure: @MainActor (Story) -> Void
+    ) async {
         await loadDefaultFonts()
         let engine = Engine()
         let scene = engine.makeScene(name: name) { _ in }
         let story = Story(scene: scene, options: options)
-        for spec in slides() {
-            story.slide(spec)
-        }
+        configure(story)
         WebpageShell.injectStoryShell()
         let runtime = await StoryRuntime.run(engine: engine, story: story)
         FacadeRoots.keep(runtime)

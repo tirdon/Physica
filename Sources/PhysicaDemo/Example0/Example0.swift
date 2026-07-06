@@ -1,61 +1,44 @@
-// Example0 — a standalone Physica *story* (slide mode), compiled to its own wasm
-// bundle. It scripts the paper "Finite Difference Solvers for Wave Interference"
-// as a five-slide scrollytelling explainer (see WaveStory.swift). This file is the
-// thin wasm entry point: load the font, pre-render the MathJax formulas, build the
-// Story, and hand it to `StoryRuntime` — the mirror of the demo's story boot.
+// Example0 — the "Finite Difference Solvers for Wave Interference" story on
+// the `Storytelling` facade: one statement mounts the five-slide
+// scrollytelling explainer (fonts, page chrome, renderer, scroll-scrub,
+// captions). The rich story script lives in WaveStory.swift, unchanged from
+// the pre-facade demo.
 //
-// Build its bundle (separate output dir so it doesn't clobber the demo's js/):
-//   swift package --swift-sdk 6.3-RELEASE-wasm32-unknown-wasip1-threads \
+// Build its bundle:
+//   swift package --swift-sdk 6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads \
 //     --allow-writing-to-directory js-example0 js --use-cdn \
 //     --output js-example0 --product Example0
 // then serve with `bun bunserver.js` and open /example0.html.
 //
-// Everything degrades: no font → captions still narrate; no MathJax → the inline
-// formulas drop but the geometry and captions carry the story.
+// Everything degrades: no font → captions still narrate; no MathJax → the
+// inline formulas drop but the geometry and captions carry the story.
 
 #if os(WASI)
 import JavaScriptKit
 import JavaScriptEventLoop
 import Physica
 
+// Interactive presentation slide example
 @main
 struct Example0 {
-    // Retained for the lifetime of the page so the rAF loop / listeners stay live.
-    @MainActor static var runtime: StoryRuntime?
-
     static func main() {
         JavaScriptEventLoop.installGlobalExecutor()
         Task { @MainActor in
-            await boot()
+            let formulas = await loadFormulas()
+
+            Storytelling(name: "wave-interference", story: { story in
+                // The facade loaded the default faces before this runs.
+                WaveStory.build(story, font: FontBook.resolve(.body).font, formulas: formulas)
+            })
         }
-    }
-
-    @MainActor
-    static func boot() async {
-        let console = JSObject.global.console
-
-        let font: Font?
-        do {
-            font = try await FontLoader.load()
-        } catch {
-            font = nil
-            _ = console.warn("Example0: font unavailable —", String(describing: error))
-        }
-
-        let formulas = await loadFormulas(console: console)
-
-        let engine = Engine()
-        let scene = engine.makeScene(name: "wave-interference") { _ in }
-        let story = Story(scene: scene)
-        WaveStory.build(story, font: font, formulas: formulas)
-        runtime = await StoryRuntime.run(engine: engine, story: story)
     }
 
     /// Renders the slides' formulas with MathJax once it is loaded. Each `try?`
     /// leaves its field `nil` on failure, and a failed `load()` skips them all —
     /// `WaveStory` then leans on captions alone.
     @MainActor
-    private static func loadFormulas(console: JSValue) async -> WaveStory.Formulas {
+    private static func loadFormulas() async -> WaveStory.Formulas {
+        let console = JSObject.global.console
         var formulas = WaveStory.Formulas()
         do {
             try await MathJaxLoader.load()
@@ -88,8 +71,8 @@ struct Example0 {
 @main
 struct Example0 {
     static func main() {
-        print("Example0 is a wasm story; build with:")
-        print("swift package --swift-sdk 6.3-RELEASE-wasm32-unknown-wasip1-threads --allow-writing-to-directory js-example0 js --use-cdn --output js-example0 --product Example0")
+        print("Example0 is the wasm wave story; build with:")
+        print("swift package --swift-sdk 6.3-SNAPSHOT-2026-06-11-a-wasm32-unknown-wasip1-threads --allow-writing-to-directory js-example0 js --use-cdn --output js-example0 --product Example0")
     }
 }
 

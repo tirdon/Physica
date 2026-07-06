@@ -1,43 +1,15 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Physica · Example3 — A rigid body, the Hamiltonian way</title>
-
-<!-- MathJax (display + inline). The wasm renderer builds the DOM, then polls
-     MathJax.startup.promise and calls typesetPromise() itself — but the async
-     script here also auto-typesets on load, so either arrival order works.
-     crossorigin="anonymous" is required: the bun server sends COEP require-corp,
-     which blocks a cross-origin script without the CORS attribute (same reason
-     CLAUDE.md documents for the tex-svg loader). -->
-<script>
-  window.MathJax = {
-    tex: {
-      inlineMath: [['\\(','\\)'], ['$','$']],
-      displayMath: [['$$','$$'], ['\\[','\\]']],
-      tags: 'none',          // equation numbers are placed manually via \tag{N}
-      processEscapes: true
-    },
-    chtml: { mtextInheritFont: true },   // \text uses the page serif
-    options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] }
-  };
-</script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async crossorigin="anonymous"></script>
-
-<!-- No <style> here: the article stylesheet is embedded in the wasm bundle
-     (PhysicaWeb, Sources/Physica/WASM/Article/ArticleStyle.css) and injected into
-     <head> by ArticleDOM.render, so this shell only carries MathJax config + the
-     mount element + the boot. -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Physica · Example3 — Rigid Bodies</title>
 </head>
 <body>
-  <!-- The wasm renderer clears and mounts the whole article (topbar + article)
-       into this container. -->
-  <div id="app"></div>
-
+  <canvas id="main"></canvas>
   <script type="module">
     import { init } from "./js-example3/index.js";
-    await init({ getImports() { return {}; } });
+    await init({ getImports() { return {  }; } });
   </script>
 </body>
 </html>

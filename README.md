@@ -123,44 +123,60 @@ entity.components[DropTargetComponent.self] = DropTargetComponent(
 
 `Sources/PhysicaDemo/Example1/Demos/PendulumDemo.swift` runs the pendulum demo script;
 `Sources/PhysicaDemo/Example2/EquationStoryDemo.swift` is a full scroll-driven
-equation-solving story at `example2.html`.
+equation-solving story at `example2.html`. Every demo mounts through the
+one-statement facade — `Storytelling { scene in … }` / `Storytelling(story:)` /
+`Document("title") { … }` — which loads the fonts, injects the page chrome
+(the shipping HTML shells are a bare `<canvas id="main">` + module import),
+and boots the runtime.
 
 ## Layout
 
 ```
-Sources/Physica/            dependency-free core — builds & tests on macOS and wasm
-  Math/      Real/Position TypeAtlas (#if wasm32 → Float, macOS → Double), sugar
+Sources/Foundation/         shared leaf module (product-neutral value types)
+  Maths/     Real/Position TypeAtlas (#if wasm32 → Float, macOS → Double), sugar
              (1.i, 2.s), Quaternion, Matrix4, Color, Easing, Interpolatable
+  Geometry/  Path (+ sector/arc builders), flatten, PathMorph, SVGPath, Mesh + morph
+Sources/Typesetting/        the `Typesetting` product — pure parsing, no scene coupling
   Algebra/   Rational, Expression + parser, Simplifier, Equation + moves,
              Projection, DisplayToken — a pure leaf (no other dependencies)
-  Geometry/  Path + flatten, PathMorph, SVGPath, Mesh + MeshMorph — value types
-  Typesetting/ TrueType parser (Font, cmap, ByteReader), MathSVG + TagScanner,
-             Affine2 — markup → glyph paths, no scene coupling
-  ECS/       Component(Set), Entity, System/EntityQuery, Group, Layouts, Updater
-  Animation/ Animation + blueprints, tracks (begin/apply/rewind), Clip, Timeline;
-             Effects/ Highlight, Shake, SaveState
-  Scene/     Scene (scripted API, snapshot), Camera, SceneCamera (animatable),
-             Engine, RenderBackend, ClipComposer, Snapshot, Unit
-  Entities/  PathEntity + shapes (Circle…Arrow, Wall), TextEntity + write(),
-             GlyphSlice, MeshEntity, Annotations
-  Plotting/  Plane + AxisOptions, Graph, VectorField, Streamlines, plot tracks
-  Interaction/ Input events, SwipeRecognizer, DragComponents, DragCoordinator,
+  Literals/  FontRole; ValueTracking counter formatters (Integer/Decimal/Unicode)
+  (root)     TrueType parser (Font, cmap, ByteReader), MathSVG + TagScanner,
+             Affine2, PositionedGlyph (+ GlyphImage for emoji)
+Sources/Physica/            the `Physica` product core — builds & tests on macOS
+  ECS/       Components/ (Component(Set), Transform/RenderStyle, Updater),
+             Systems/ (System/EntityQuery), Entities/ (PathEntity + shapes,
+             MeshEntity, Annotations, Glyphs/ [TextEntity + write(), GlyphSlice,
+             Text()/Counter() facade factories, FontBook, TrackingTextEntity])
+  Animation/ Animation + blueprints, Keyframe/Track, value/structural tracks,
+             Clip, Blend (additive); Effects/ Drawing, Highlight, Shake
+  Storytelling/ Scene (scripted API, snapshot seam), Camera/, Engine, Timeline,
+             Memory (saveState), Unit, SlideSpec + ExitTransition, Story/
+             (Story, StoryPlayer, Transitions/)
+  Interactions/ Input events, SwipeRecognizer, DragComponents, DragCoordinator,
              InteractionRunner
-  Story/     Story, StoryPlayer, Transitions/ (fade, zoom, push, morph)
-  Physics/   PhysicsShape/Body/Motion, SDFs, HamiltonianSystem
+  Charts/    BarChart, PieChart (Pi.swift), ErrorBar; Plotting/ (Plane +
+             AxisOptions, Graph, Area, Scatter, Parametric, VectorField,
+             Streamlines, plot tracks)
+  Helpers/Physics/ PhysicsShape/Body/Motion, SDFs, HamiltonianSystem
   EquationGame/ EquationEntity, EquationGame, LiteralEntity,
              PlaceholderEquationEntity, TokenGlyphProvider
-  WASM/      (all #if os(WASI) — links JavaScriptKit conditionally)
-    Render/  WebGPURenderer + WGSL shaders, GeometryUploader, GPUHelpers
-    Web/     WebRuntime, StoryRuntime, rAF driver, InputBindings,
-             PlaybackControls, DebugOverlay, FontLoader, MathJaxLoader,
-             MathJaxTokenProvider, VisibilityObserver
-Sources/PhysicaDemo/        wasm executables (browser demo apps)
-  Example1/  pendulum animation demo — Example1.swift boots PendulumDemo;
+  Umbrella/  @_exported re-exports — consumers write one `import Physica`
+Sources/WASM/               the `WASM` product (all #if os(WASI))
+  Renderer/  WebGPURenderer + WGSL shaders, GeometryUploader, GPUHelpers
+  Webpage/   WebRuntime, StoryRuntime, rAF driver, InputBindings, EmojiLayer,
+             PlaybackControls, DebugOverlay, FontLoader (BridgeJS pilot),
+             MathJaxLoader, MathJaxTokenProvider, VisibilityObserver
+  Document/  Article DSL (auto-mounting `Document("title") { … }`), ArticleDOM,
+             styles, outline, story decks
+  Facade/    Storytelling entry points, WebpageShell (injected page chrome),
+             DocumentAutoMount, FacadeRoots
+Sources/PhysicaDemo/        wasm executables (browser demo apps, facade entries)
+  Example0/  wave-interference story; bundle js-example0/, example0.html
+  Example1/  pendulum animation demo (Demos/PendulumDemo.swift);
              bundle js-example1/, shell example1.html
-  Example2/  equation story demo — Example2.swift boots EquationStoryDemo;
+  Example2/  equation-game story (EquationStoryDemo.swift);
              bundle js-example2/, shell example2.html
-  Example0/  standalone wave-equation story; bundle js-example0/, example0.html
+  Example3/  Hamiltonian article on the Document DSL; bundle js-example3/
 Sources/StoryStudio/        WYSIWYG story editor; bundle js-studio/, studio.html
 index.html                  landing page linking to all web demos
 Tests/PhysicaTests/         swift-testing suites, debugString/snapshot assertions
@@ -185,8 +201,10 @@ for Float/Double parity.
 
 - The core never imports Foundation or JavaScriptKit; everything is `@MainActor`
   classes over `Sendable` value types (Swift 6 strict concurrency, zero warnings).
-- The WASM subtree (`Sources/Physica/WASM/`) links JavaScriptKit through a
-  `.when(platforms: [.wasi])` conditional dependency — host builds stay JSKit-free.
+- The WASM product (`Sources/WASM/`) is wholly `#if os(WASI)`; its JavaScriptKit
+  dependency is unconditional (the BridgeJS plugin's generated glue imports it
+  everywhere, with fatalError host stubs), but no JSKit symbol is reachable from
+  host code paths.
 - Scrubbing replays *animation* state; custom-system state (pendulum, physics)
   intentionally freezes during a scrub and resumes live afterward.
 - Interactions (`scene.interact`, drag/drop) run outside the paused gate — they

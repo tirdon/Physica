@@ -25,7 +25,7 @@ await new Promise((resolve) => setTimeout(resolve, 1200));
 console.log = origLog;
 
 const expected = [
-  "Example3 — article outline",
+  "Physics · Rigid bodies — article outline",
   "Title: A rigid body, integrated the Hamiltonian way",
   "§1 Chapter: The state you actually store",
   "math(equation) (1) tag=velocities",

@@ -4,110 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Physica · Example1 — Pendulum</title>
-  <style>
-    :root { color-scheme: dark; }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: #101014;
-      color: #e8e8ec;
-      font: 14px/1.4 -apple-system, system-ui, sans-serif;
-    }
-    main { max-width: 960px; margin: 0 auto; padding: 16px; }
-    .scene-host { position: relative; overflow: hidden; }   /* anchor + clip for the debug-overlay labels */
-    canvas#main {
-      display: block;
-      width: 100%;
-      aspect-ratio: 16 / 10;
-      background: #16161c;
-      border-radius: 8px;
-      touch-action: none;
-      -webkit-user-select: none;
-      user-select: none;
-      -webkit-touch-callout: none;   /* no long-press callout interrupting a touch/pen drag */
-    }
-    .playback {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      padding: 10px 2px;
-    }
-    .playback button {
-      width: 72px;
-      padding: 6px 0;
-      border: 1px solid #3a3a44;
-      border-radius: 6px;
-      background: #1e1e26;
-      color: inherit;
-      cursor: pointer;
-    }
-    .playback button:hover { background: #2a2a34; }
-    .playback input[type="range"] { flex: 1; accent-color: #5b8cff; }
-    .playback .time { min-width: 96px; text-align: right; font-variant-numeric: tabular-nums; color: #9a9aa6; }
-    .hint { color: #62626e; padding: 4px 2px; }
-    .replay {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      padding: 12px 28px;
-      border: 1px solid #3a3a44;
-      border-radius: 10px;
-      background: rgba(30, 30, 38, 0.9);
-      color: #e8e8ec;
-      font: inherit;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    .replay:hover { background: rgba(42, 42, 52, 0.95); }
-    .replay[hidden] { display: none; }
-    .overlay-label {
-      position: absolute;
-      z-index: 2;
-      transform: translate(-50%, -50%);
-      padding: 1px 5px;
-      border-radius: 4px;
-      background: rgba(91, 140, 255, 0.85);
-      color: #fff;
-      font: 11px/1.5 ui-monospace, monospace;
-      pointer-events: none;
-      white-space: nowrap;
-    }
-    /* Option+Shift overlay — draggable/touchable entities, colored by kind */
-    .overlay-label-drag        { background: rgba(255, 170, 64, 0.92);  color: #221604; }
-    .overlay-label-drop        { background: rgba(120, 230, 130, 0.92); color: #06210a; }
-    .overlay-label-tap         { background: rgba(200, 150, 255, 0.92); color: #1a0a2a; }
-    .overlay-label-doubleClick { background: rgba(255, 130, 190, 0.92); color: #2a0617; }
-    .overlay-label-hover       { background: rgba(120, 220, 240, 0.92); color: #04222a; }
-    /* Option+Shift drop-target hit regions — outlined under the number labels */
-    .overlay-drop-area {
-      position: absolute;
-      z-index: 1;
-      box-sizing: border-box;
-      border: 1.5px dashed rgba(120, 230, 130, 0.9);
-      background: rgba(120, 230, 130, 0.12);
-      border-radius: 6px;
-      pointer-events: none;
-    }
-  </style>
 </head>
 <body>
-  <main>
-    <h1>Physica</h1>
-    <div class="scene-host" id="scene-host">
-      <canvas id="main"></canvas>
-      <button id="replay" class="replay" hidden>↻ Replay</button>
-    </div>
-    <div class="playback" id="playback">
-      <button id="playpause">Pause</button>
-      <input id="scrub" type="range" min="0" max="1000" value="0" step="1">
-      <span class="time" id="time">0.00 / 0.00 s</span>
-    </div>
-    <p class="hint">Hold <kbd>Shift</kbd> for entity indices, <kbd>⌥</kbd>+<kbd>Shift</kbd> for draggable/touchable elements. Drag the slider to scrub the timeline.</p>
-  </main>
+  <canvas id="main"></canvas>
   <script type="module">
     import { init } from "./js-example1/index.js";
-    await init({ getImports() { return {}; } });
+    await init({ getImports() { return {  }; } });
   </script>
 </body>
 </html>
