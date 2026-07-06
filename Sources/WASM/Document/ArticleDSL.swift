@@ -186,9 +186,26 @@ public enum Section: Sendable {
 /// A whole article, assembled from a `@DocumentBuilder` body.
 public struct Document: Sendable {
     public var sections: [Section]
+    /// Page title when the facade auto-mounts ("" = leave the page's own).
+    public var title: String
 
     public init(@DocumentBuilder _ content: () -> [Section]) {
+        self.title = ""
         self.sections = content()
+    }
+
+    /// The facade spelling: builds the document AND auto-mounts it into the
+    /// page — `Document("Physics · Rigid bodies") { Title(…); Chapter(…) { … } }`
+    /// as a bare statement renders the article (outline logged first, MathJax
+    /// injected, `ArticleDOM` walked). On the host it just builds the value, so
+    /// authoring code stays host-typecheckable.
+    @discardableResult
+    public init(_ title: String, @DocumentBuilder _ content: () -> [Section]) {
+        self.title = title
+        self.sections = content()
+        #if os(WASI)
+        DocumentAutoMount.schedule(self)
+        #endif
     }
 }
 

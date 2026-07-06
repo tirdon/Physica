@@ -138,6 +138,7 @@ public final class Story {
     public func slide(
         _ title: String,
         transition: SlideTransition = .none,
+        exit: ExitTransition = .clear,
         _ content: (Scene) -> Void
     ) -> SlideRecord {
         let isEntrance = transition.isContentEntrance
@@ -177,6 +178,20 @@ public final class Story {
         // scan only those — the injected slide-in/clear are excluded.
         let contentStartClip = scene.timeline.clips.count
         content(scene)
+        let contentEndClip = scene.timeline.clips.count
+
+        // The slide's own-introduced set — needed both for the exit effect and
+        // the auto-clear bookkeeping below.
+        let scanStart = isEntrance ? contentStartClip : startClip
+        let introduced = introducedEntities(in: scanStart..<contentEndClip)
+
+        // A non-`.clear` exit animates the introduced content away as the
+        // slide's final beat; the boundary clear then drops the (now invisible)
+        // entities as usual, so scrubbing back restores both.
+        if !introduced.isEmpty, let exitAnimations = exit.animations(for: introduced) {
+            _ = scene.playItems(exitAnimations, for: exit.duration, easing: nil)
+        }
+
         let endClip = scene.timeline.clips.count
         // An empty slide is allowed: a zero-duration rest on the globals already on
         // the board (e.g. a degraded no-font slide that shows only the scaffolding).
@@ -186,8 +201,6 @@ public final class Story {
         // `carry`-ed forward and any it already removed within the slide (a `.fade`
         // overlay or `.highlight` border, introduced *and* removed in one clip).
         // Globals (added before/between slides) aren't in `introduced`.
-        let scanStart = isEntrance ? contentStartClip : startClip
-        let introduced = introducedEntities(in: scanStart..<endClip)
         let carried = Set(scene.carriedThisSlide.map(ObjectIdentifier.init))
         let removedInSlide = removedEntities(in: scanStart..<endClip)
         pendingAutoClear = introduced.filter {
