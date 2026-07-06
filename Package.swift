@@ -79,24 +79,27 @@ let package = Package(
 		),
 
 		// ---- WASM product (browser glue + WebGPU renderer + document DSL) -----
-		// Every file `#if os(WASI)`; the sole JavaScriptKit dependency, still
-		// conditional so host builds stay clean.
+		// Every Swift file here is `#if os(WASI)`. The JavaScriptKit dependency
+		// is unconditional (not `.when(.wasi)`) because the BridgeJS plugin's
+		// generated glue imports it on every platform (its host stubs
+		// fatalError); the demos already depend on JSKit unconditionally, so
+		// this adds nothing new to the host build graph.
 		.target(
 			name: "PhysicaWeb",
 			dependencies: [
 				"PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting",
 				"PhysicaKernel", "PhysicaCharts", "PhysicaPhysics", "PhysicaEquationGame",
-				.product(
-					name: "JavaScriptKit", package: "JavaScriptKit",
-					condition: .when(platforms: [.wasi])
-				),
-				.product(
-					name: "JavaScriptEventLoop", package: "JavaScriptKit",
-					condition: .when(platforms: [.wasi])
-				),
+				.product(name: "JavaScriptKit", package: "JavaScriptKit"),
+				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
 			],
 			path: "Sources/WASM",
-			exclude: ["Umbrella"]
+			exclude: ["Umbrella"],
+			// BridgeJS pilot (FontLoader): the @JSGetter/@JSClass/@JSFunction
+			// macros expand to @_extern(wasm) thunks the plugin generates —
+			// both the feature flag and the plugin are required on any target
+			// that uses them.
+			swiftSettings: [.enableExperimentalFeature("Extern")],
+			plugins: [.plugin(name: "BridgeJS", package: "JavaScriptKit")]
 		),
 		.target(
 			name: "WASM",
@@ -121,10 +124,7 @@ let package = Package(
 				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
 				.target(name: "Physica")
 				],
-			path: "Sources/PhysicaDemo/Example1",
-			plugins: [
-				.plugin(name: "BridgeJS", package: "JavaScriptKit")
-			]
+			path: "Sources/PhysicaDemo/Example1"
         ),
         .executableTarget(
             name: "Example2",

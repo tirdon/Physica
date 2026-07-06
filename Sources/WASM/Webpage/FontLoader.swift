@@ -1,4 +1,15 @@
 // Fetches a TTF over HTTP and parses it with the pure-Swift Font parser.
+//
+// This file is the **BridgeJS pilot**: the JS surface it touches is imported
+// through the modern typed macros (`@JSFunction(from: .global)` fetch, a
+// `@JSClass` Response wrapper with a `@JSGetter`) instead of dynamic
+// `JSObject.global` lookups. The macros expand to `@_extern(wasm)` thunks the
+// BridgeJS build plugin generates, so PhysicaWeb carries the plugin + the
+// `Extern` experimental feature in Package.swift. Everything read from
+// `globalThis` needs no `getImports()` entry. Promise awaits deliberately stay
+// on `JSPromise.value()` (typed promise returns are still the macros' rough
+// edge). The other web files stay on the dynamic style until this pattern has
+// soaked.
 
 import PhysicaFoundation
 import PhysicaAlgebra
@@ -14,6 +25,17 @@ import JavaScriptEventLoop
 
 enum FontLoaderError: Error {
     case fetchFailed(String)
+}
+
+// MARK: BridgeJS typed imports (the pilot surface)
+
+/// `globalThis.fetch(url)` — returns the response promise.
+@JSFunction(from: .global) func fetch(_ url: String) throws(JSException) -> JSObject
+
+/// The awaited `Response`: the two members `load` reads, typed.
+@JSClass struct FetchResponse {
+    @JSGetter var ok: Bool
+    @JSFunction func arrayBuffer() throws(JSException) -> JSObject
 }
 
 @MainActor
@@ -45,12 +67,15 @@ public enum FontLoader {
     }
 
     public static func load(url: String = defaultURL) async throws -> Font {
-        let global = JSObject.global
-        let response = try await JSPromise(unsafelyWrapping: global.fetch!(url).object!).value()
-        guard response.ok.boolean == true else {
+        let responseValue = try await JSPromise(unsafelyWrapping: fetch(url)).value()
+        guard let responseObject = responseValue.object else {
             throw FontLoaderError.fetchFailed(url)
         }
-        let buffer = try await JSPromise(unsafelyWrapping: response.arrayBuffer().object!).value()
+        let response = FetchResponse(unsafelyWrapping: responseObject)
+        guard try response.ok else {
+            throw FontLoaderError.fetchFailed(url)
+        }
+        let buffer = try await JSPromise(unsafelyWrapping: response.arrayBuffer()).value()
         let typed = JSTypedArray<UInt8>(
             unsafelyWrapping: JSObject.global.Uint8Array.function!.new(buffer)
         )
