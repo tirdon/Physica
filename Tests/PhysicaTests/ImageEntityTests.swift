@@ -72,6 +72,34 @@ import Testing
         #expect(abs((images.first?.opacity ?? 0) - 1) < 1e-3)
     }
 
+    @Test func rotationRidesTheSnapshot() {
+        let scene = Scene()
+        let photo = Image("photo.png", width: 2)
+        scene.add(photo)
+        scene.play(photo.rotate(by: Real.pi / 4), for: 1.s)
+
+        scene.seek(to: 1)
+        var images = imagePrimitives(in: scene)
+        #expect(abs((images.first?.rotation ?? 0) - Real.pi / 4) < 1e-3)
+        #expect(abs((images.first?.size.x ?? 0) - 2) < 1e-3)   // pure roll: scale untouched
+
+        scene.seek(to: 0)   // scrub-safe: roll rewinds with the transform
+        images = imagePrimitives(in: scene)
+        #expect(abs(images.first?.rotation ?? 1) < 1e-3)
+    }
+
+    @Test func emojiBoxesCarryTheEntityRoll() {
+        let scene = Scene()
+        let party = TextEntity("🎉").shown()
+        scene.add(party)
+        scene.play(party.rotate(by: Real.pi / 6), for: 1.s)
+
+        scene.seek(to: 1)
+        let images = imagePrimitives(in: scene)
+        #expect(!images.isEmpty)
+        #expect(images.allSatisfy { abs($0.rotation - Real.pi / 6) < 1e-3 && $0.url == nil })
+    }
+
     @Test func imagesAreTappableAndDraggable() {
         // Hit-testing runs on worldBounds, which `localBounds` supplies — so
         // the ordinary interaction components work on a bitmap unchanged.

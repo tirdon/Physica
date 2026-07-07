@@ -84,9 +84,10 @@ final class EmojiLayer {
                 if img.getAttribute("src").string != url {
                     _ = img.setAttribute("src", url)
                 }
+                // World roll is CCW (y up); CSS rotate is clockwise (y down).
                 _ = img.setAttribute("style", """
                     position:absolute; left:\(x)px; top:\(y)px; \
-                    transform:translate(-50%,-50%); \
+                    transform:translate(-50%,-50%) rotate(\(-Double(image.rotation))rad); \
                     width:\(pixelWidth)px; height:\(pixelHeight)px; \
                     object-fit:contain; opacity:\(Double(image.opacity)); \
                     pointer-events:none; user-select:none;
@@ -99,7 +100,8 @@ final class EmojiLayer {
             span.textContent = .string(image.text)
             _ = span.setAttribute("style", """
                 position:absolute; left:\(x)px; top:\(y)px; \
-                transform:translate(-50%,-50%); font-size:\(pixelHeight)px; \
+                transform:translate(-50%,-50%) rotate(\(-Double(image.rotation))rad); \
+                font-size:\(pixelHeight)px; \
                 line-height:1; opacity:\(Double(image.opacity)); \
                 pointer-events:none; user-select:none; white-space:nowrap;
                 """)

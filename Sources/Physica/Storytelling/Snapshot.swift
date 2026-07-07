@@ -103,6 +103,9 @@ public struct ImagePrimitive: Sendable {
     public var size: SIMD2<Real>
     /// Resolved opacity (entity style × per-glyph × write fade).
     public var opacity: Real
+    /// The box's world Z-roll in radians (CCW, y-up). The DOM layer negates it
+    /// for CSS screen space (y-down), so `entity.rotate(by:)` shows through.
+    public var rotation: Real = 0
     /// Bitmap source for `Image` entities (URL / data: URI); nil for text
     /// glyphs, which the layer renders as native emoji.
     public var url: String? = nil
@@ -260,15 +263,16 @@ extension Scene {
             let style = entity.components[RenderStyleComponent.self] ?? RenderStyleComponent()
             let world = entity.worldTransform
             let center = world.applying(to: .zero)
-            // World size via a probe along +x (uniform entity scale) — the
-            // same recipe as emoji glyph boxes below.
-            let probe = world.applying(to: Position(1, 0, 0))
-            let unit = probe.distance(to: center)
+            // One probe along local +x carries scale (its length) and the
+            // box's Z-roll (its angle) — same recipe as emoji glyphs below.
+            let probe = world.applying(to: Position(1, 0, 0)) - center
+            let unit = (probe.x * probe.x + probe.y * probe.y + probe.z * probe.z).squareRoot()
             primitives.append(.image(ImagePrimitive(
                 text: "",
                 center: center,
                 size: image.size * unit,
                 opacity: style.opacity,
+                rotation: Real.atan2(probe.y, probe.x),
                 url: image.source
             )))
         }
@@ -300,14 +304,17 @@ extension Scene {
                         glyph.offset.y * text.fontSize + half.y * 0.72
                     )
                     let center = world.applying(to: Position(localCenter.x, localCenter.y, 0))
-                    // World size via a probe along +x (uniform glyph scale).
-                    let probe = world.applying(to: Position(localCenter.x + 1, localCenter.y, 0))
-                    let unit = probe.distance(to: center)
+                    // One probe along +x: scale from its length, roll from its
+                    // angle (uniform glyph scale).
+                    let probe = world.applying(
+                        to: Position(localCenter.x + 1, localCenter.y, 0)) - center
+                    let unit = (probe.x * probe.x + probe.y * probe.y + probe.z * probe.z).squareRoot()
                     primitives.append(.image(ImagePrimitive(
                         text: image.text,
                         center: center,
                         size: image.size * text.fontSize * unit,
-                        opacity: glyphOpacity
+                        opacity: glyphOpacity,
+                        rotation: Real.atan2(probe.y, probe.x)
                     )))
                     continue
                 }
