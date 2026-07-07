@@ -67,6 +67,9 @@ public enum ArticleOutline {
         case let .table(spec):
             let rows = spec.columns > 0 ? (spec.cells.count + spec.columns - 1) / spec.columns : 0
             out.append(indent + "table: \(spec.columns) cols × \(rows) rows (\(spec.cells.count) cells)")
+        case let .figure(spec):
+            out.append(indent + "figure: " + spec.source
+                + (spec.caption.map { " — " + snippet($0) } ?? ""))
         case let .presentation(slides):
             out.append(indent + "presentation: \(slides.count) slides")
             for slide in slides {

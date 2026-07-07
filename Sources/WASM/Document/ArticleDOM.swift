@@ -281,6 +281,9 @@ public enum ArticleDOM {
         case let .table(spec):
             _ = parent.appendChild(buildTable(spec, ctx: ctx))
 
+        case let .figure(spec):
+            _ = parent.appendChild(buildFigure(spec, ctx: ctx))
+
         case let .presentation(slides):
             _ = parent.appendChild(buildDeck(slides, ctx: ctx))
 
@@ -373,6 +376,27 @@ public enum ArticleDOM {
             _ = table.appendChild(div)
         }
         return table
+    }
+
+    // MARK: Figure (full-column image + caption)
+
+    private static func buildFigure(_ spec: FigureBlock, ctx: Ctx) -> JSValue {
+        var fig = ctx.el("figure"); fig.className = .string("figure")
+        var img = ctx.el("img")
+        // COEP: cross-origin sources must answer with CORS headers (same as
+        // every CDN fetch on the page); data:/same-origin unaffected. Set
+        // before src so the policy governs the fetch.
+        img.crossOrigin = .string("anonymous")
+        _ = img.setAttribute("loading", "lazy")
+        _ = img.setAttribute("alt", spec.alt ?? spec.caption ?? "")
+        _ = img.setAttribute("src", spec.source)
+        _ = fig.appendChild(img)
+        if let caption = spec.caption {
+            var cap = ctx.el("figcaption")
+            ctx.appendInline(caption, to: cap)   // captions carry \(…\) inline math
+            _ = fig.appendChild(cap)
+        }
+        return fig
     }
 
     // MARK: Notation grid

@@ -169,6 +169,14 @@ public enum ArticleStyle {
   .dtable .dcell-math{font-family:var(--serif); color:var(--text); font-size:17px; white-space:nowrap}
   .dtable.sep-col .dcell:nth-child(odd){border-right:1px solid var(--rule); padding-right:22px}
 
+  /* ---------- figure ---------- */
+  .figure{margin:28px 0}
+  .figure img{display:block; width:100%; height:auto; border-radius:12px; border:1px solid var(--rule)}
+  .figure figcaption{
+    font-family:var(--sans); font-size:14px; color:var(--text-3); line-height:1.55;
+    text-align:center; margin-top:10px;
+  }
+
   /* ---------- presentation deck (embedded Physica Story) ---------- */
   .story-deck{
     margin:28px 0; border:1px solid #202834; border-radius:16px; overflow:hidden;

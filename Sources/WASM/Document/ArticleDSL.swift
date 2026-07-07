@@ -25,6 +25,7 @@
 //                 Return("updated state")
 //             }
 //             table(columns: 2) { formula("\\Delta t = 1/240"); "fixed step" }
+//             figure("figures/rig.png", caption: "The rig, mid-swing.")
 //             presentation { slide("Title") { "slide body" } }
 //         }
 //
@@ -148,6 +149,17 @@ public struct TableBlock: Sendable {
     public var cells: [TableCell]
 }
 
+/// A full-column figure: a bitmap (any URL / data: URI the page can load) with
+/// an optional caption. Under COEP a cross-origin source must answer with CORS
+/// headers (the `<img>` is created `crossorigin`); data:/same-origin need nothing.
+public struct FigureBlock: Sendable {
+    public var source: String
+    /// Rendered as a `<figcaption>`; may carry inline `\(…\)` math.
+    public var caption: String?
+    /// Screen-reader text; defaults to the caption.
+    public var alt: String?
+}
+
 // MARK: - Block: flowing article content (inside chapters, slides, …)
 
 public indirect enum Block: Sendable {
@@ -157,6 +169,7 @@ public indirect enum Block: Sendable {
     case math(MathKind, tag: String?, tex: String)
     case procedure(ProcedureBlock)
     case table(TableBlock)
+    case figure(FigureBlock)
     case presentation([DeckSlide])
     case notation([NotationRow])
 }
@@ -344,6 +357,11 @@ public func table(columns: Int, separator: TableSeparator = .row, @TableBuilder 
 
 /// An inline-math cell inside a `table` (a bare string is a text cell).
 public func formula(_ tex: String) -> TableCell { .math(tex) }
+
+/// A figure: a full-column image with an optional caption.
+public func figure(_ source: String, caption: String? = nil, alt: String? = nil) -> Block {
+    .figure(FigureBlock(source: source, caption: caption, alt: alt))
+}
 
 public func presentation(@SlideBuilder _ slides: () -> [DeckSlide]) -> Block {
     .presentation(slides())
