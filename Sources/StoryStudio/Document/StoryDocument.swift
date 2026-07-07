@@ -188,24 +188,28 @@ enum ElementKind: Sendable, Equatable, Codable {
     case circle(radius: Real)
     case rectangle(width: Real, height: Real)
     case triangle(side: Real)
+    case image(source: String, width: Real)  // bitmap box (URL / data: URI), square
 
     /// The inline-editable text for this kind — the visible string for `.text`,
-    /// the TeX source for `.math`, `nil` for shapes (nothing to type). Drives both
-    /// the inspector's text field and the canvas double-click editor.
+    /// the TeX source for `.math`, the source URL for `.image`, `nil` for shapes
+    /// (nothing to type). Drives both the inspector's text field and the canvas
+    /// double-click editor.
     var editableText: String? {
         switch self {
         case let .text(string, _): return string
         case let .math(tex, _): return tex
+        case let .image(source, _): return source
         default: return nil
         }
     }
 
-    /// A copy with the editable text replaced, font size preserved; shapes are
-    /// returned unchanged. The non-mutating counterpart of `editableText`.
+    /// A copy with the editable text replaced, font size/width preserved; shapes
+    /// are returned unchanged. The non-mutating counterpart of `editableText`.
     func withEditableText(_ value: String) -> ElementKind {
         switch self {
         case let .text(_, fontSize): return .text(value, fontSize: fontSize)
         case let .math(_, fontSize): return .math(tex: value, fontSize: fontSize)
+        case let .image(_, width): return .image(source: value, width: width)
         default: return self
         }
     }

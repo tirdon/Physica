@@ -36,6 +36,9 @@ enum ElementBuilder {
                 return nil   // MathJax unavailable or tex unresolved → skip gracefully
             }
             entity = math.shown()
+        case let .image(source, width):
+            // The fill color doesn't apply to a bitmap; opacity/scale steps do.
+            entity = Image(source, width: width)
         }
         entity.position = Position(element.position.x, element.position.y, 0)
         entity.name = element.name

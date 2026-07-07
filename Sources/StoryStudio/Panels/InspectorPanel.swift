@@ -192,6 +192,15 @@ enum InspectorPanel {
             numberField("Side", side) { v in
                 app.updateElement(id, label: "s-\(id)") { $0.kind = .triangle(side: v) }
             }
+        case let .image(source, width):
+            textField("Source", source) { newSource in
+                app.updateElement(id, label: "src-\(id)") { $0.kind = $0.kind.withEditableText(newSource) }
+            }
+            numberField("Width", width) { v in
+                app.updateElement(id, label: "iw-\(id)") { e in
+                    if case let .image(s, _) = e.kind { e.kind = .image(source: s, width: v) }
+                }
+            }
         }
 
         return closures

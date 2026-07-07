@@ -16,8 +16,9 @@ import Physica
             ElementDoc(id: 2, name: "c", kind: .circle(radius: 1.5), position: Vec2(-1, 0), colorHex: 0xAABBCC),
             ElementDoc(id: 3, name: "r", kind: .rectangle(width: 2, height: 3), position: Vec2(0, 0), colorHex: 0xFFFFFF),
             ElementDoc(id: 4, name: "tri", kind: .triangle(side: 1.2), position: Vec2(2, 2), colorHex: 0x000000),
+            ElementDoc(id: 5, name: "pic", kind: .image(source: "cat.png", width: 2), position: Vec2(0, -1), colorHex: 0xFFFFFF),
         ]
-        let doc = StoryDocument(slides: [slide], nextElementID: 5)
+        let doc = StoryDocument(slides: [slide], nextElementID: 6)
         let back = try StoryDocumentIO.decode(StoryDocumentIO.encode(doc))
         #expect(back == doc)
     }
@@ -75,6 +76,7 @@ import Physica
     @Test func editableTextReadsTextAndTeX() {
         #expect(ElementKind.text("hi", fontSize: 0.5).editableText == "hi")
         #expect(ElementKind.math(tex: "x^2", fontSize: 0.5).editableText == "x^2")
+        #expect(ElementKind.image(source: "cat.png", width: 2).editableText == "cat.png")
         #expect(ElementKind.circle(radius: 1).editableText == nil)
         #expect(ElementKind.rectangle(width: 1, height: 2).editableText == nil)
         #expect(ElementKind.triangle(side: 1).editableText == nil)
@@ -84,6 +86,8 @@ import Physica
         #expect(ElementKind.text("a", fontSize: 0.8).withEditableText("b") == .text("b", fontSize: 0.8))
         #expect(ElementKind.math(tex: "a", fontSize: 0.3).withEditableText("\\beta")
                 == .math(tex: "\\beta", fontSize: 0.3))
+        #expect(ElementKind.image(source: "a.png", width: 1.5).withEditableText("b.png")
+                == .image(source: "b.png", width: 1.5))
     }
 
     @Test func withEditableTextLeavesShapesUnchanged() {
@@ -135,5 +139,25 @@ import Physica
         #expect(build.story.slides.count == 1)
         // fade (1s) + scale (0.5s) = 1.5s span, no trailing wait when steps exist.
         #expect(abs(build.story.slides[0].duration - 1.5) < 1e-3)
+    }
+
+    @Test func imageWritesAsAFadeIn() {
+        // A bitmap has no strokes, so its `.write` step compiles to pre-add
+        // hidden + fade to 1 — and rewinds hidden, like every scrub-safe track.
+        var slide = SlideDoc(title: "Pic")
+        slide.elements = [
+            ElementDoc(id: 1, name: "pic", kind: .image(source: "cat.png", width: 2), position: Vec2(0, 0), colorHex: 0xFFFFFF)
+        ]
+        slide.steps = [StepDoc(id: 1, elementID: 1, verb: .write, start: 0, duration: 1)]
+        let doc = StoryDocument(slides: [slide], nextElementID: 2, nextStepID: 2)
+        let build = StoryCompiler.build(doc, font: nil)
+        guard let image = build.entities[1] as? Image else {
+            Issue.record("expected an Image entity"); return
+        }
+        let opacity = { image.components[RenderStyleComponent.self]?.opacity ?? -1 }
+        build.scene.seek(to: build.scene.timeline.duration)
+        #expect(abs(opacity() - 1) < 1e-4)   // the write step faded it in
+        build.scene.seek(to: 0)
+        #expect(abs(opacity() - 0) < 1e-4)   // scrubbed back: hidden again
     }
 }

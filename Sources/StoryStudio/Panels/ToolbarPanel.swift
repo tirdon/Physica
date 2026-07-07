@@ -57,6 +57,14 @@ enum ToolbarPanel {
         add(text, "T Text")        { app.addElement(.text("Text", fontSize: 0.7), name: "Text", colorHex: 0xF2F2EC) }
         add(text, "\u{0192} Math") { app.addElement(.math(tex: "e^{i\\pi}+1=0", fontSize: 0.9), name: "Math", colorHex: 0xF2F2EC) }
 
+        let media = group("Media")
+        add(media, "\u{1F5BC} Image") {
+            // A visible placeholder bitmap (5×5 red PNG); edit the Source
+            // field in the inspector to point at a real URL / data: URI.
+            app.addElement(
+                .image(source: placeholderPNG, width: 2), name: "Image", colorHex: 0xFFFFFF)
+        }
+
         let actions = group("Actions")
         add(actions, "\u{25B6} Play")   { app.togglePlay() }
         add(actions, "\u{21B6} Undo")   { app.undo() }
@@ -66,4 +74,9 @@ enum ToolbarPanel {
         return closures
     }
 }
+
+/// The 5×5 red PNG the Image tool starts with — decodes with no fetch, so a
+/// fresh element is visible immediately; the inspector's Source field (or a
+/// double-click on the stage) points it at a real URL / data: URI.
+private let placeholderPNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
 #endif

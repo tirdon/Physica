@@ -54,6 +54,12 @@ enum StoryCompiler {
                     entities[element.id] = entity
                     if !introducedByStep.contains(element.id) {
                         s.add(entity)
+                    } else if let image = entity as? Image {
+                        // A bitmap has no strokes to write: it pre-adds hidden
+                        // and its `.write` step fades it in (the framework's
+                        // image-reveal idiom, `scene.add`/`fade`).
+                        image.components[RenderStyleComponent.self]?.opacity = 0
+                        s.add(image)
                     }
                 }
 
@@ -93,6 +99,7 @@ enum StoryCompiler {
         case .write:
             if let text = entity as? TextEntity { return .write(text) }
             if let path = entity as? PathEntity { return .draw(path) }
+            if entity is Image { return entity.fade(to: 1) }   // pre-added hidden above
             return nil
         case let .fade(to):
             return entity.fade(to: to)
