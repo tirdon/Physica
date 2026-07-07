@@ -90,11 +90,12 @@ public struct MeshDraw: Sendable {
     }
 }
 
-/// An image glyph (an emoji cluster in a text run): the geometry consumer
-/// skips these; the web runtime's DOM emoji layer renders them (native color
-/// emoji) projected over the canvas, fading with `opacity` during a write.
+/// An image box: an emoji cluster in a text run, or an `Image` entity's
+/// bitmap. The geometry consumer skips these; the web runtime's DOM image
+/// layer renders them (native color emoji / an `<img>`) projected over the
+/// canvas, fading with `opacity` during a write.
 public struct ImagePrimitive: Sendable {
-    /// The character cluster to rasterize.
+    /// The character cluster to rasterize ("" for a bitmap).
     public var text: String
     /// World-space center of the glyph box.
     public var center: Position
@@ -102,9 +103,13 @@ public struct ImagePrimitive: Sendable {
     public var size: SIMD2<Real>
     /// Resolved opacity (entity style × per-glyph × write fade).
     public var opacity: Real
+    /// Bitmap source for `Image` entities (URL / data: URI); nil for text
+    /// glyphs, which the layer renders as native emoji.
+    public var url: String? = nil
 
     public var debugString: String {
-        "image['\(text)' \(fmt(opacity, decimals: 2))]"
+        if url != nil { return "image[src \(fmt(opacity, decimals: 2))]" }
+        return "image['\(text)' \(fmt(opacity, decimals: 2))]"
     }
 }
 
@@ -248,6 +253,23 @@ extension Scene {
                 color: model.color,
                 opacity: model.opacity,
                 shading: model.shading
+            )))
+        }
+
+        if let image = entity.components[ImageComponent.self], !image.source.isEmpty {
+            let style = entity.components[RenderStyleComponent.self] ?? RenderStyleComponent()
+            let world = entity.worldTransform
+            let center = world.applying(to: .zero)
+            // World size via a probe along +x (uniform entity scale) — the
+            // same recipe as emoji glyph boxes below.
+            let probe = world.applying(to: Position(1, 0, 0))
+            let unit = probe.distance(to: center)
+            primitives.append(.image(ImagePrimitive(
+                text: "",
+                center: center,
+                size: image.size * unit,
+                opacity: style.opacity,
+                url: image.source
             )))
         }
 
