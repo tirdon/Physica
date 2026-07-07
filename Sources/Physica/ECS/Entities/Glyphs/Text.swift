@@ -11,15 +11,15 @@ import PhysicaTypesetting
 public func Text(
     _ string: String,
     font role: FontRole = .body,
-    color: Color = .white
+    color: Color? = nil
 ) -> TextEntity {
     let (font, size) = FontBook.resolve(role)
-    if let font {
-        return TextEntity(string, font: font, fontSize: size, color: color)
-    }
-    let entity = TextEntity(glyphs: [], fontSize: size)
-    entity.name = string
-    return entity
+    return TextEntity(
+        string,
+        font: font ?? .empty,
+        fontSize: size,
+        color: color ?? Config.textColor
+    )
 }
 
 @MainActor

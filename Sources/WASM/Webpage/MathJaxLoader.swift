@@ -87,6 +87,18 @@ public enum MathJaxLoader {
         )
     }
 
+    /// The synchronous counterpart, for authoring closures (which can't
+    /// await): valid once `load()` resolved — the facade mount does that
+    /// before running them and records the outcome in `Config.mathJaxReady`.
+    /// Throws when MathJax is absent (headless smoke) — `try?` degrades.
+    public static func formulaNow(
+        _ tex: String, fontSize: Real = 1, color: Color = .white
+    ) throws -> TextEntity {
+        try TextEntity.math(
+            svg: svg(for: tex), fontSize: fontSize, color: color, named: tex
+        )
+    }
+
     private static func startupPromise() -> JSObject? {
         guard let mathJax = JSObject.global.MathJax.object,
             let startup = mathJax.startup.object

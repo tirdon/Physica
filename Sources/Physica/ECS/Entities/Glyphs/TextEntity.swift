@@ -61,8 +61,10 @@ public final class TextEntity: Entity {
         set { components[TextComponent.self] = newValue }
     }
 
-    /// Lays out `text` left-to-right and centers it on the origin.
-    public init(_ text: String, font: Font, fontSize: Real = 1, color: Color = .white) {
+    /// Lays out `text` left-to-right and centers it on the origin. `font`
+    /// defaults to `Font.default` (the `Config.defaultFont` registration; the
+    /// empty face when nothing is loaded), so `TextEntity("Hi")` just works.
+    public init(_ text: String, font: Font = .default, fontSize: Real = 1, color: Color = .white) {
         self.text = text
         super.init()
 
@@ -167,6 +169,27 @@ public final class TextEntity: Entity {
     public func shown() -> Self {
         var component = textComponent
         component.writeProgress = 1
+        textComponent = component
+        return self
+    }
+
+    /// Reglyphs the stored string with a concrete face — the per-entity
+    /// override of the role system: `Text("Hi").custom(font: loaded)`. `size`
+    /// additionally overrides the font size (rescaling the stroke width the
+    /// way the initializer derives it). A no-op on entities without a source
+    /// string (math/SVG glyphs have no text to re-lay-out).
+    @discardableResult
+    public func custom(font: Font, size: Real? = nil) -> Self {
+        guard !text.isEmpty else { return self }
+        var component = textComponent
+        component.glyphs = Self.layoutGlyphs(text, font: font)
+        if let size {
+            component.fontSize = size
+            if var style = components[RenderStyleComponent.self] {
+                style.strokeWidth = 0.012 * size
+                components[RenderStyleComponent.self] = style
+            }
+        }
         textComponent = component
         return self
     }

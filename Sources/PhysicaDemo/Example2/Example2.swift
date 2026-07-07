@@ -25,29 +25,17 @@ struct Example2 {
 
     static func main() {
         JavaScriptEventLoop.installGlobalExecutor()
-        Task { @MainActor in
-            // Load MathJax up front (async); the provider choice happens inside
-            // the story script, after the facade has filled the FontBook.
-            var mathJaxReady = true
-            do {
-                try await MathJaxLoader.load()
-            } catch {
-                mathJaxReady = false
-                _ = JSObject.global.console.warn(
-                    "Example2: MathJax unavailable —", String(describing: error)
-                )
-            }
-
-            Storytelling(name: "equation-story", story: { story in
-                // Equation tokens render with MathJax when available, otherwise
-                // the loaded font, otherwise stub boxes.
-                let font = FontBook.resolve(.body).font
-                let provider: TokenGlyphProvider = mathJaxReady
-                    ? MathJaxTokenProvider()
-                    : (font.map { FontTokenGlyphProvider(font: $0) } ?? StubTokenGlyphProvider())
-                game = EquationStoryDemo.build(story, font: font, provider: provider)
-            })
-        }
+        // The facade mount loads MathJax (and the fonts) before running the
+        // story closure, recording the outcome in `Config.mathJaxReady`.
+        Storytelling(name: "equation-story", story: { story in
+            // Equation tokens render with MathJax when available, otherwise
+            // the loaded font, otherwise stub boxes.
+            let font = FontBook.resolve(.body).font
+            let provider: TokenGlyphProvider = Config.mathJaxReady
+                ? MathJaxTokenProvider()
+                : (font.map { FontTokenGlyphProvider(font: $0) } ?? StubTokenGlyphProvider())
+            game = EquationStoryDemo.build(story, font: font, provider: provider)
+        })
     }
 }
 

@@ -15,6 +15,14 @@ struct CharacterMap: Sendable {
     let storage: Storage
     private let data: [UInt8]
 
+    /// The absent map (backs `Font.empty`): every lookup misses (glyph 0).
+    static let empty = CharacterMap(storage: .format12(groups: []), data: [])
+
+    init(storage: Storage, data: [UInt8]) {
+        self.storage = storage
+        self.data = data
+    }
+
     init(data: [UInt8], offset: Int, format: Int) throws {
         self.data = data
         var reader = ByteReader(data: data, offset: offset)

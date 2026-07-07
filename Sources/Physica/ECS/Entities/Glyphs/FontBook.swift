@@ -33,6 +33,12 @@ public enum FontBook {
         return (fallback, defaultSize(for: role))
     }
 
+    /// Whether `role` has its own registration (the facade skips fetching a
+    /// default face for roles the author already filled via `Config`).
+    public static func hasRegistration(for role: FontRole) -> Bool {
+        entries[role] != nil
+    }
+
     /// Built-in size scale (world units at the default fit-10 camera).
     public static func defaultSize(for role: FontRole) -> Real {
         switch role {
@@ -50,4 +56,11 @@ public enum FontBook {
         entries = [:]
         fallback = nil
     }
+}
+
+public extension Font {
+    /// The face a bare `TextEntity("Hi")` renders with: the registered default
+    /// (`Config.defaultFont` — the facade fills it at mount), else `.empty`
+    /// (text degrades to an empty-glyph entity, never traps).
+    @MainActor static var `default`: Font { FontBook.fallback ?? .empty }
 }

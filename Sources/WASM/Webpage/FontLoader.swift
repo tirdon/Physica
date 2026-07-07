@@ -86,4 +86,13 @@ public enum FontLoader {
         return try Font(data: bytes)
     }
 }
+
+public extension Font {
+    /// Fetch + parse a TTF by URL — `let face = try await Font.load("https://…")`.
+    /// Sugar for `FontLoader.load(url:)`; pair with `Config.defaultFont(face)`
+    /// before the `Storytelling` statement to make it the default face.
+    static func load(_ url: String) async throws -> Font {
+        try await FontLoader.load(url: url)
+    }
+}
 #endif

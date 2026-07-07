@@ -83,7 +83,7 @@ public struct Storytelling {
     private static func mount(
         name: String, options: StoryOptions, configure: @MainActor (Story) -> Void
     ) async {
-        await loadDefaultFonts()
+        await prepare()
         let engine = Engine()
         let scene = engine.makeScene(name: name) { _ in }
         let story = Story(scene: scene, options: options)
@@ -94,7 +94,7 @@ public struct Storytelling {
     }
 
     private static func mount(name: String, body: @MainActor (Scene) -> Void) async {
-        await loadDefaultFonts()
+        await prepare()
         let engine = Engine()
         let scene = engine.makeScene(name: name, body)
         WebpageShell.injectSceneShell()
@@ -102,24 +102,60 @@ public struct Storytelling {
         FacadeRoots.keep(runtime)
     }
 
-    /// Fetches the default faces concurrently and fills `FontBook`. Failures
+    /// The mount prelude: fonts and MathJax load concurrently, both degrading
+    /// rather than blocking the mount.
+    private static func prepare() async {
+        async let fonts: Void = loadDefaultFonts()
+        async let mathJax: Void = loadMathJax()
+        _ = await (fonts, mathJax)
+    }
+
+    /// Fetches the default faces concurrently and fills `FontBook`, skipping
+    /// any face the author already supplied via `Config.defaultFont`/
+    /// `Config.font(_:for:)` before the `Storytelling` statement. Failures
     /// degrade (`Text()` renders empty glyphs) rather than blocking the mount —
     /// the GPU-free smoke path has no usable fetch, and the story must still
     /// log and boot.
     static func loadDefaultFonts() async {
-        async let bodyFace: Font? = try? FontLoader.load()
-        async let mathFace: Font? = try? FontLoader.loadComputerModern()
-        async let monoFace: Font? = try? FontLoader.loadMono()
+        let needsBody = FontBook.fallback == nil
+        async let bodyFace = fetchIfNeeded(needsBody, url: FontLoader.defaultURL)
+        async let mathFace = fetchIfNeeded(
+            !FontBook.hasRegistration(for: .math), url: FontLoader.computerModernURL
+        )
+        async let monoFace = fetchIfNeeded(
+            !FontBook.hasRegistration(for: .mono), url: FontLoader.monoURL
+        )
 
         if let font = await bodyFace {
             FontBook.fallback = font
-        } else {
+        } else if needsBody {
             _ = JSObject.global.console.warn(
                 "Physica: default font unavailable — Text() degrades to empty glyphs"
             )
         }
         if let font = await mathFace { FontBook.register(font, for: .math) }
         if let font = await monoFace { FontBook.register(font, for: .mono) }
+    }
+
+    private static func fetchIfNeeded(_ needed: Bool, url: String) async -> Font? {
+        guard needed else { return nil }
+        return try? await FontLoader.load(url: url)
+    }
+
+    /// Attempts the MathJax load once at mount and records the outcome in
+    /// `Config.mathJaxReady`, so authoring closures can branch on it. A
+    /// missing DOM (headless smoke) is silent — absent, not a failure; real
+    /// load errors warn.
+    static func loadMathJax() async {
+        do {
+            try await MathJaxLoader.load()
+            Config.mathJaxReady = true
+        } catch MathJaxError.unavailable {
+        } catch {
+            _ = JSObject.global.console.warn(
+                "Physica: MathJax unavailable —", String(describing: error)
+            )
+        }
     }
 }
 

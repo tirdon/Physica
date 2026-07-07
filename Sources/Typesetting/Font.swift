@@ -32,6 +32,24 @@ public struct Font: Sendable {
     private let advances: [Real]
     private let cmap: CharacterMap
 
+    /// The absent face: zero glyphs, every lookup misses. Backs `Font.default`
+    /// when no face is registered — text laid out with it degrades to an
+    /// empty-glyph entity (the headless-smoke / failed-fetch path) instead of
+    /// trapping, keeping scene graph and timeline shape-stable.
+    public static let empty = Font()
+
+    private init() {
+        unitsPerEm = 1000
+        ascender = 0.8
+        descender = -0.2
+        glyphCount = 0
+        data = []
+        glyfOffset = 0
+        locaOffsets = []
+        advances = []
+        cmap = .empty
+    }
+
     public init(data: [UInt8]) throws {
         self.data = data
         var reader = ByteReader(data: data)

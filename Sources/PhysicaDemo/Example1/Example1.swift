@@ -21,27 +21,16 @@ import Physica
 struct Example1 {
     static func main() {
         JavaScriptEventLoop.installGlobalExecutor()
-        Task { @MainActor in
-            // Pre-render the swing-equation formula: MathJax is async and the
-            // scene script below is sync. nil degrades — the demo skips math.
-            var formula: TextEntity?
-            do {
-                formula = try await MathJaxLoader.formula(
-                    "\\ddot{\\theta} = -\\frac{g}{\\ell}\\,\\sin\\theta", fontSize: 0.75
-                )
-            } catch {
-                _ = JSObject.global.console.warn(
-                    "Example1: MathJax unavailable —", String(describing: error)
-                )
-            }
-            let captured = formula
-
-            Storytelling(name: "pendulum") { scene in
-                // The facade loaded the default faces before this runs.
-                PendulumDemo.build(
-                    scene, font: FontBook.resolve(.body).font, formula: captured
-                )
-            }
+        // The facade mount loads fonts + MathJax before running the closure,
+        // so the swing-equation formula renders synchronously here; `try?`
+        // degrades to nil without MathJax (headless smoke) — the demo skips math.
+        Storytelling(name: "pendulum") { scene in
+            let formula = try? MathJaxLoader.formulaNow(
+                "\\ddot{\\theta} = -\\frac{g}{\\ell}\\,\\sin\\theta", fontSize: 0.75
+            )
+            PendulumDemo.build(
+                scene, font: FontBook.resolve(.body).font, formula: formula
+            )
         }
     }
 }

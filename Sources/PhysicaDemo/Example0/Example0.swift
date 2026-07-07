@@ -23,44 +23,35 @@ import Physica
 struct Example0 {
     static func main() {
         JavaScriptEventLoop.installGlobalExecutor()
-        Task { @MainActor in
-            let formulas = await loadFormulas()
-
-            Storytelling(name: "wave-interference", story: { story in
-                // The facade loaded the default faces before this runs.
-                WaveStory.build(story, font: FontBook.resolve(.body).font, formulas: formulas)
-            })
-        }
+        // The facade mount loads fonts + MathJax before running the closure.
+        Storytelling(name: "wave-interference", story: { story in
+            WaveStory.build(story, font: FontBook.resolve(.body).font, formulas: makeFormulas())
+        })
     }
 
-    /// Renders the slides' formulas with MathJax once it is loaded. Each `try?`
-    /// leaves its field `nil` on failure, and a failed `load()` skips them all —
-    /// `WaveStory` then leans on captions alone.
+    /// Renders the slides' formulas with the mount-loaded MathJax —
+    /// synchronous, so it runs inside the story closure. Each `try?` leaves
+    /// its field `nil` on failure, and absent MathJax (headless smoke) skips
+    /// them all — `WaveStory` then leans on captions alone.
     @MainActor
-    private static func loadFormulas() async -> WaveStory.Formulas {
-        let console = JSObject.global.console
+    private static func makeFormulas() -> WaveStory.Formulas {
         var formulas = WaveStory.Formulas()
-        do {
-            try await MathJaxLoader.load()
-        } catch {
-            _ = console.warn("Example0: MathJax unavailable — formulas skipped:", String(describing: error))
-            return formulas
-        }
+        guard Config.mathJaxReady else { return formulas }
 
-        formulas.wave1D = try? await MathJaxLoader.formula(
+        formulas.wave1D = try? MathJaxLoader.formulaNow(
             "u_{tt} = c^{2}\\,u_{xx}", fontSize: 0.55, color: WaveStory.chalk)
-        formulas.update1D = try? await MathJaxLoader.formula(
+        formulas.update1D = try? MathJaxLoader.formulaNow(
             "u_i^{\\,n+1} = 2u_i^{\\,n} - u_i^{\\,n-1} + r^{2}\\!\\left(u_{i+1}^{\\,n} - 2u_i^{\\,n} + u_{i-1}^{\\,n}\\right)",
             fontSize: 0.42, color: WaveStory.chalk)
-        formulas.courant1D = try? await MathJaxLoader.formula(
+        formulas.courant1D = try? MathJaxLoader.formulaNow(
             "r = \\dfrac{c\\,\\Delta t}{\\Delta x} \\le 1", fontSize: 0.5, color: WaveStory.chalk)
-        formulas.wave2D = try? await MathJaxLoader.formula(
+        formulas.wave2D = try? MathJaxLoader.formulaNow(
             "u_{tt} = c^{2}\\,(u_{xx} + u_{yy}) - \\gamma\\,u_t", fontSize: 0.5, color: WaveStory.chalk)
-        formulas.courant2D = try? await MathJaxLoader.formula(
+        formulas.courant2D = try? MathJaxLoader.formulaNow(
             "r \\le \\dfrac{1}{\\sqrt{2}}", fontSize: 0.5, color: WaveStory.chalk)
-        formulas.constructive = try? await MathJaxLoader.formula(
+        formulas.constructive = try? MathJaxLoader.formulaNow(
             "r_2 - r_1 = m\\lambda", fontSize: 0.42, color: WaveStory.warm)
-        formulas.destructive = try? await MathJaxLoader.formula(
+        formulas.destructive = try? MathJaxLoader.formulaNow(
             "r_2 - r_1 = \\left(m + \\tfrac{1}{2}\\right)\\lambda", fontSize: 0.42, color: WaveStory.danger)
         return formulas
     }

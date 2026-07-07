@@ -18,8 +18,10 @@ public final class Scene: Identifiable {
     public private(set) var entities: [Entity] = []
     let systems = SystemRegistry()
 
-    public var camera = Camera()
-    public var background: SceneBackground = .color(.background)
+    /// Both start from the `Config` defaults captured at scene creation;
+    /// assign (or animate `scene.frame`) to override per scene.
+    public var camera: Camera
+    public var background: SceneBackground
     /// Width/height of the bound viewport; kept current by the engine.
     public var viewportAspect: Real = 1.6
 
@@ -68,6 +70,8 @@ public final class Scene: Identifiable {
     public init() {
         self.id = Scene.nextID
         Scene.nextID += 1
+        self.camera = Camera(projection: Config.camera)
+        self.background = Config.background
     }
 
     // MARK: Entity management (timeline tracks call these)
