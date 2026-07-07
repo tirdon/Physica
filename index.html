@@ -71,6 +71,72 @@
     .tag-story    { background: #1a3a2a; color: #6bdfb0; }
     .tag-editor   { background: #3a2a1a; color: #dfb06b; }
     .tag-article  { background: #3a2a2a; color: #dfa06b; }
+
+    /* --- the essay --- */
+    .divider {
+      border: 0;
+      border-top: 1px solid #2a2a34;
+      margin: 56px 0 48px;
+    }
+    .post .kicker {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #6a6a76;
+      margin-bottom: 10px;
+    }
+    .post h2 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+    }
+    .post .dek {
+      color: #9a9aa6;
+      font-size: 15.5px;
+      margin-bottom: 36px;
+    }
+    .post h3 {
+      font-size: 19px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      margin: 40px 0 14px;
+    }
+    .post p {
+      font-family: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+      font-size: 17px;
+      line-height: 1.72;
+      color: #cfcfd8;
+      margin-bottom: 18px;
+    }
+    .post code {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 0.82em;
+      background: #1a1a22;
+      border: 1px solid #2a2a34;
+      border-radius: 5px;
+      padding: 1.5px 5px;
+      color: #dcdde6;
+    }
+    .post pre {
+      background: #16161c;
+      border: 1px solid #2a2a34;
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin: 22px 0 26px;
+      overflow-x: auto;
+    }
+    .post pre code {
+      display: block;
+      background: none;
+      border: 0;
+      padding: 0;
+      font-size: 13px;
+      line-height: 1.65;
+      color: #c9cbda;
+    }
+    .post pre .c { color: #62626e; }
   </style>
 </head>
 <body>
@@ -104,6 +170,51 @@
         <span class="card-tag tag-editor">editor</span>
       </a>
     </div>
+
+    <hr class="divider">
+
+    <article class="post">
+      <p class="kicker">Design notes</p>
+      <h2>Animations are values</h2>
+      <p class="dek">Notes on the framework behind these demos — deferred animations, an append-only timeline, and one language from TeX to vertex buffer.</p>
+
+      <p>This is how the pendulum demo hangs its bob and starts it swinging, condensed from the real script:</p>
+
+<pre><code>let pivot  = Wall(face: .down)             <span class="c">// the ceiling</span>
+let center = pivot.center
+let string = Line(start: center, end: center - 4.j)
+let bob    = Circle().move(to: string.end)
+
+scene.add(pivot, string, bob)
+scene.play(bob.move(to: 1.i + 1.j), for: 2.s)
+scene.play(.write(formula), for: 2.5.s)    <span class="c">// θ̈ = −(g/ℓ) sin θ</span></code></pre>
+
+      <p>The odd thing about <code>move(to:)</code> is that it moves nothing. Every entity method in Physica — <code>move</code>, <code>shift</code>, <code>rotate</code>, <code>fade</code>, <code>morph</code> — returns an <code>Animation</code>: a description of a change that hasn't happened yet. Descriptors chain (<code>star.opacity(0.8).shift(-1.j)</code> is one value carrying two changes) and touch nothing until the scene accepts them. The snippet already leans on this: <code>bob</code> isn't a circle, it's a circle carrying its pending move. <code>scene.add</code> lands it at the string's end once, and the later <code>play</code> re-animates the same handle without double-applying that move.</p>
+
+      <p>That one decision — animation as a value rather than a side effect — is the framework's spine. Nearly everything these demos do that a tweening library can't falls out of it.</p>
+
+      <h3>A history, not a schedule</h3>
+
+      <p>Most animation systems are schedulers. You register callbacks against a clock, the clock fires them, and a fired tween is gone. Physica's timeline is instead an append-only history of clips, and every track in a clip honors one contract: <code>begin</code> captures start values, <code>apply(at:)</code> is a pure function of time, <code>rewind</code> puts things back. Seek forward and clips apply in order. Seek backward and they rewind in reverse — a title introduced by <code>.write</code> un-writes, then stops existing. <code>.erase</code> isn't separate code; it's the write blueprint run backwards: the fill fades, then each stroke retracts, last glyph first.</p>
+
+      <p>Scroll-driven stories are the payoff. A <code>Story</code> owns no second engine; it partitions the one timeline into slides and steps and hands the playhead to your scrollbar. Scroll down the wave-interference explainer and the lesson plays; scroll up and it plays backwards: graph morphs, camera moves, equation writes and all. Nobody wrote a reverse path for any of it.</p>
+
+      <h3>One currency, so everything composes</h3>
+
+      <p>Because <code>Animation</code> is the single currency, unrelated features animate identically. The camera is an entity, so a slide transition is <code>scene.play(scene.frame.zoom(to: 7))</code>. Text slices to glyphs: <code>formula[(formula.glyphCount - 4)...].color(.teal)</code> tints exactly the sin&nbsp;θ in the pendulum's equation of motion. Even chart data is animatable — in the string slide of the wave story, <code>string.plot { -mode($0) }</code> swings a plotted standing wave to its mirror image by morphing the sample polyline.</p>
+
+      <h3>Swift from TeX to vertex buffer</h3>
+
+      <p>The other bet is vertical. Apart from MathJax, which lays out the TeX, no JavaScript runs under these pages — no animation library, no charting library, no physics engine. The equation the pendulum writes overhead comes back from MathJax as SVG and is Swift from there down: an SVG-path parser (arcs lowered to cubics), a TrueType parser for the fonts, a small computer-algebra system with exact rational arithmetic for the equation game, a symplectic rigid-body integrator stepping at a fixed 1/240&nbsp;s for the toon-shaded drop, and a WebGPU renderer — all compiled to WebAssembly.</p>
+
+      <p>The renderer stays deliberately dumb: it consumes flattened scene snapshots and knows nothing else. That seam keeps the framework honest, because everything above it runs on macOS with no GPU and no browser. The test suite plays stories, scrubs them backwards, and drags tokens across equals signs; 442 tests finish in under half a second.</p>
+
+      <h3>The lane that doesn't scrub</h3>
+
+      <p>Interaction gets one deliberate exception. In the equation-game story, dragging a projection operator onto the vector equation <em>F</em>&nbsp;=&nbsp;m<em>g</em>&nbsp;+&nbsp;<em>T</em> runs through <code>interact</code>: the same clip machinery, played immediately, in parallel — and kept out of the scrub history. Your algebra survives while the lesson rewinds around it. A timeline you can trust records what it owns and nothing else.</p>
+
+      <p>The demos above are the argument — each mounts with one statement, <code>Storytelling&nbsp;{ … }</code> for the scenes and stories, <code>Document("…")&nbsp;{ … }</code> for the article. Open the wave story, scroll a few slides in, and drag the scrollbar back up. The test of an animation system isn't what it plays. It's what it plays backwards.</p>
+    </article>
   </main>
 </body>
 </html>
