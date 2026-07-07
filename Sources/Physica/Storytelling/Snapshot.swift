@@ -116,16 +116,40 @@ public struct ImagePrimitive: Sendable {
     }
 }
 
+/// An in-canvas bitmap quad (`Sprite` entities): drawn by the renderer in 2D
+/// painter's order — occludable, unlike `ImagePrimitive`'s DOM layer. The
+/// renderer resolves `url` through its texture cache
+/// (`copyExternalImageToTexture`); the geometry consumer letterboxes the
+/// bitmap into the box in-shader.
+public struct SpritePrimitive: Sendable {
+    /// Bitmap source (URL / data: URI).
+    public var url: String
+    /// World-space center of the quad.
+    public var center: Position
+    /// World-space box size (width, height).
+    public var size: SIMD2<Real>
+    /// World Z-roll in radians (CCW, y-up) — the quad corners rotate with it.
+    public var rotation: Real
+    /// Resolved entity opacity.
+    public var opacity: Real
+
+    public var debugString: String {
+        "sprite['\(url.prefix(24))' \(fmt(opacity, decimals: 2))]"
+    }
+}
+
 public enum RenderPrimitive: Sendable {
     case path(PathPrimitive)
     case mesh(MeshDraw)
     case image(ImagePrimitive)
+    case sprite(SpritePrimitive)
 
     public var debugString: String {
         switch self {
         case .path(let path): return path.debugString
         case .mesh(let mesh): return mesh.debugString
         case .image(let image): return image.debugString
+        case .sprite(let sprite): return sprite.debugString
         }
     }
 }
@@ -274,6 +298,23 @@ extension Scene {
                 opacity: style.opacity,
                 rotation: Real.atan2(probe.y, probe.x),
                 url: image.source
+            )))
+        }
+
+        if let sprite = entity.components[SpriteComponent.self], !sprite.source.isEmpty {
+            let style = entity.components[RenderStyleComponent.self] ?? RenderStyleComponent()
+            let world = entity.worldTransform
+            let center = world.applying(to: .zero)
+            // Same one-probe recipe as the image branch above: length = scale,
+            // angle = roll.
+            let probe = world.applying(to: Position(1, 0, 0)) - center
+            let unit = (probe.x * probe.x + probe.y * probe.y + probe.z * probe.z).squareRoot()
+            primitives.append(.sprite(SpritePrimitive(
+                url: sprite.source,
+                center: center,
+                size: sprite.size * unit,
+                rotation: Real.atan2(probe.y, probe.x),
+                opacity: style.opacity
             )))
         }
 

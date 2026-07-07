@@ -96,6 +96,61 @@ enum Shaders {
         return vec4<f32>(draw.color.rgb * alpha, alpha);
     }
 
+    // ---- Sprites: textured quads (the `Sprite` entity) ----
+    // Group 2 is bound only by the sprite pipeline: the per-URL texture, a
+    // shared linear sampler, and the texture's aspect for contain-fit.
+
+    struct SpriteTex {
+        aspect: f32,
+    };
+
+    @group(2) @binding(0) var spriteTexture: texture_2d<f32>;
+    @group(2) @binding(1) var spriteSampler: sampler;
+    @group(2) @binding(2) var<uniform> spriteTex: SpriteTex;
+
+    struct SpriteOut {
+        @builtin(position) clip: vec4<f32>,
+        @location(0) uv: vec2<f32>,
+    };
+
+    // Sprite draws are always draw(6, 1, 0, 0) with the vertex buffer bound at
+    // the quad's byte offset, so vertex_index is 0..5 and indexes the UV table
+    // matching the uploader's corner order (TL BL BR, TL BR TR).
+    @vertex
+    fn vs_sprite(
+        @builtin(vertex_index) index: u32, @location(0) position: vec3<f32>
+    ) -> SpriteOut {
+        var uvs = array<vec2<f32>, 6>(
+            vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 1.0), vec2<f32>(1.0, 1.0),
+            vec2<f32>(0.0, 0.0), vec2<f32>(1.0, 1.0), vec2<f32>(1.0, 0.0)
+        );
+        var out: SpriteOut;
+        out.clip = globals.viewProjection * draw.model * vec4<f32>(position, 1.0);
+        out.uv = uvs[index];
+        return out;
+    }
+
+    @fragment
+    fn fs_sprite(in: SpriteOut) -> @location(0) vec4<f32> {
+        // Contain-fit letterbox: params.x = quad w/h, spriteTex.aspect =
+        // texture w/h; stretch the sampled window along the roomier axis.
+        var uv = in.uv;
+        let quadAspect = max(draw.params.x, 1e-4);
+        let texAspect = max(spriteTex.aspect, 1e-4);
+        if (quadAspect > texAspect) {
+            uv.x = (uv.x - 0.5) * (quadAspect / texAspect) + 0.5;
+        } else {
+            uv.y = (uv.y - 0.5) * (texAspect / quadAspect) + 0.5;
+        }
+        // Sample before the bar test — textureSample needs uniform control flow.
+        let texel = textureSample(spriteTexture, spriteSampler, uv);
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+            return vec4<f32>(0.0);   // letterbox bar: blend no-op
+        }
+        // Texture uploads premultiplied; draw.color.a carries entity opacity.
+        return texel * draw.color.a;
+    }
+
     // ---- Meshes (Lambert / toon) ----
 
     struct MeshIn {

@@ -56,5 +56,10 @@ enum GPU {
     static let renderAttachment = 16
     static let vertexStage = 1
     static let fragmentStage = 2
+    // GPUTextureUsage is a separate bit namespace from GPUBufferUsage:
+    // texture COPY_DST is 2 (not the buffer 8); copyExternalImageToTexture
+    // requires COPY_DST | RENDER_ATTACHMENT on the destination.
+    static let textureCopyDst = 2
+    static let textureBinding = 4
 }
 #endif

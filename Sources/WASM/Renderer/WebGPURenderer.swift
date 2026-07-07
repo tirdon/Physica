@@ -16,6 +16,15 @@ import PhysicaEquationGame
 import JavaScriptKit
 import JavaScriptEventLoop
 
+/// One sprite bitmap's lifecycle in the renderer's URL-keyed cache: decode in
+/// flight, ready (its group-2 bind group: texture view + sampler + aspect), or
+/// failed (warned once, never retried).
+private enum SpriteTextureState {
+    case loading
+    case ready(JSValue)
+    case failed
+}
+
 @MainActor
 final class WebGPURenderer: RenderBackend {
     private let canvas: JSValue
@@ -28,6 +37,10 @@ final class WebGPURenderer: RenderBackend {
     private var strokePipeline: JSValue = .undefined
     private var meshPipeline: JSValue = .undefined
     private var outlinePipeline: JSValue = .undefined
+    private var spritePipeline: JSValue = .undefined
+    private var spriteBindGroupLayout: JSValue = .undefined
+    private var spriteSampler: JSValue = .undefined
+    private var spriteTextures: [String: SpriteTextureState] = [:]
 
     private var globalsBuffer: JSValue = .undefined
     private var globalsBindGroup: JSValue = .undefined
@@ -118,6 +131,41 @@ final class WebGPURenderer: RenderBackend {
             "bindGroupLayouts": [globalsLayout, drawBindGroupLayout].jsValue
         ].jsValue)
 
+        // Sprites add a third group: per-URL texture + shared sampler + the
+        // texture's aspect (contain-fit). Built once per bitmap at load time.
+        spriteBindGroupLayout = device.createBindGroupLayout([
+            "entries": [
+                [
+                    "binding": JSValue.number(0),
+                    "visibility": JSValue.number(Double(GPU.fragmentStage)),
+                    "texture": [
+                        "sampleType": JSValue.string("float"),
+                        "viewDimension": JSValue.string("2d"),
+                    ].jsValue,
+                ].jsValue,
+                [
+                    "binding": JSValue.number(1),
+                    "visibility": JSValue.number(Double(GPU.fragmentStage)),
+                    "sampler": ["type": JSValue.string("filtering")].jsValue,
+                ].jsValue,
+                [
+                    "binding": JSValue.number(2),
+                    "visibility": JSValue.number(Double(GPU.fragmentStage)),
+                    "buffer": [
+                        "type": JSValue.string("uniform"),
+                        "minBindingSize": JSValue.number(16),
+                    ].jsValue,
+                ].jsValue,
+            ].jsValue
+        ].jsValue)
+        let spriteLayout = device.createPipelineLayout([
+            "bindGroupLayouts": [globalsLayout, drawBindGroupLayout, spriteBindGroupLayout].jsValue
+        ].jsValue)
+        spriteSampler = device.createSampler([
+            "magFilter": JSValue.string("linear"),
+            "minFilter": JSValue.string("linear"),
+        ].jsValue)
+
         let flatVertexBuffers: JSValue = [
             [
                 "arrayStride": JSValue.number(12),
@@ -196,10 +244,11 @@ final class WebGPURenderer: RenderBackend {
 
         func pipeline(
             vertexEntry: String, fragmentEntry: String, buffers: JSValue,
-            target: JSValue, depthStencil: JSValue, cullMode: String = "none"
+            target: JSValue, depthStencil: JSValue, cullMode: String = "none",
+            overrideLayout: JSValue? = nil
         ) -> JSValue {
             device.createRenderPipeline([
-                "layout": layout,
+                "layout": overrideLayout ?? layout,
                 "vertex": [
                     "module": module,
                     "entryPoint": JSValue.string(vertexEntry),
@@ -249,6 +298,19 @@ final class WebGPURenderer: RenderBackend {
                 front: stencilFace(compare: "always", passOp: "keep"),
                 back: stencilFace(compare: "always", passOp: "keep")
             )
+        )
+
+        // Sprite quads: stroke-family settings (blend on, depth read-only) —
+        // 2D painter's order, occludable by later paths in draw order.
+        spritePipeline = pipeline(
+            vertexEntry: "vs_sprite", fragmentEntry: "fs_sprite", buffers: flatVertexBuffers,
+            target: target(blend: true),
+            depthStencil: depthStencil(
+                depthWrite: false, depthCompare: "always",
+                front: stencilFace(compare: "always", passOp: "keep"),
+                back: stencilFace(compare: "always", passOp: "keep")
+            ),
+            overrideLayout: spriteLayout
         )
 
         meshPipeline = pipeline(
@@ -406,12 +468,107 @@ final class WebGPURenderer: RenderBackend {
                 boundMesh = false
                 _ = pass.setBindGroup(1, drawBindGroup, [command.uniformOffset].jsValue)
                 _ = pass.draw(command.vertexCount, 1, command.vertexStart, 0)
+            case .sprite:
+                guard let url = command.textureURL else { continue }
+                switch spriteTextures[url] {
+                case .ready(let textureGroup):
+                    _ = pass.setPipeline(spritePipeline)
+                    // Bind the flat stream at the quad's byte offset so
+                    // vertex_index runs 0..5 for the shader's UV table.
+                    _ = pass.setVertexBuffer(0, flatBuffer.buffer, command.vertexStart * 12)
+                    boundFlat = false   // offset-bound; the next path rebinds at 0
+                    boundMesh = false
+                    _ = pass.setBindGroup(1, drawBindGroup, [command.uniformOffset].jsValue)
+                    _ = pass.setBindGroup(2, textureGroup)
+                    _ = pass.draw(6, 1, 0, 0)
+                case nil:
+                    // First sighting: start the decode; the quad draws once
+                    // a later frame finds the texture ready.
+                    ensureSpriteTexture(url)
+                case .loading, .failed:
+                    break
+                }
             }
         }
 
         _ = pass.end()
         let commandBuffer: JSValue = encoder.finish()
         _ = device.queue.submit([commandBuffer].jsValue)
+    }
+
+    // MARK: Sprite textures
+
+    /// Fetch → decode → upload, once per URL: createImageBitmap feeds
+    /// copyExternalImageToTexture (premultiplied, matching the pass blend),
+    /// and the group-2 bind group (view + sampler + aspect) is built once so
+    /// per-frame sprite draws are pure bind-and-draw. Failures warn once and
+    /// park as `.failed`; frames simply skip the quad either way.
+    private func ensureSpriteTexture(_ url: String) {
+        guard spriteTextures[url] == nil else { return }
+        spriteTextures[url] = .loading
+        Task { @MainActor [weak self] in
+            let global = JSObject.global
+            do {
+                let response = try await JSPromise(
+                    unsafelyWrapping: global.fetch!(url).object!
+                ).value()
+                let blob = try await JSPromise(
+                    unsafelyWrapping: response.blob().object!
+                ).value()
+                let bitmap = try await JSPromise(
+                    unsafelyWrapping: global.createImageBitmap!(blob).object!
+                ).value()
+                guard let self else { return }
+                let width = max(bitmap.width.number ?? 1, 1)
+                let height = max(bitmap.height.number ?? 1, 1)
+                let texture = self.device.createTexture([
+                    "size": [
+                        "width": JSValue.number(width),
+                        "height": JSValue.number(height),
+                    ].jsValue,
+                    "format": JSValue.string("rgba8unorm"),
+                    "usage": JSValue.number(Double(
+                        GPU.textureCopyDst | GPU.textureBinding | GPU.renderAttachment
+                    )),
+                ].jsValue)
+                _ = self.device.queue.copyExternalImageToTexture(
+                    ["source": bitmap].jsValue,
+                    ["texture": texture, "premultipliedAlpha": JSValue.boolean(true)].jsValue,
+                    ["width": JSValue.number(width), "height": JSValue.number(height)].jsValue
+                )
+                let aspectBuffer = self.device.createBuffer([
+                    "size": JSValue.number(16),
+                    "usage": JSValue.number(Double(GPU.uniform | GPU.copyDst)),
+                ].jsValue)
+                _ = self.device.queue.writeBuffer(
+                    aspectBuffer, 0,
+                    JSTypedArray<Float32>([Float32(width / height), 0, 0, 0]).jsValue
+                )
+                let bindGroup = self.device.createBindGroup([
+                    "layout": self.spriteBindGroupLayout,
+                    "entries": [
+                        [
+                            "binding": JSValue.number(0),
+                            "resource": texture.createView(),
+                        ].jsValue,
+                        [
+                            "binding": JSValue.number(1),
+                            "resource": self.spriteSampler,
+                        ].jsValue,
+                        [
+                            "binding": JSValue.number(2),
+                            "resource": ["buffer": aspectBuffer].jsValue,
+                        ].jsValue,
+                    ].jsValue,
+                ].jsValue)
+                self.spriteTextures[url] = .ready(bindGroup)
+            } catch {
+                self?.spriteTextures[url] = .failed
+                _ = global.console.warn(
+                    "Physica: sprite bitmap failed —", url, String(describing: error)
+                )
+            }
+        }
     }
 
     private func uploadBuffers(_ packet: FramePacket) {

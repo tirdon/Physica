@@ -19,10 +19,13 @@ struct DrawCommand {
         case mesh
         /// Inverted-hull toon outline: same index range as its mesh, own slot.
         case meshOutline
+        /// Textured quad (`Sprite`): 6 flat verts + a texture the renderer
+        /// resolves from `textureURL` via its copyExternalImageToTexture cache.
+        case sprite
     }
 
     var kind: Kind
-    /// Vertex range in the flat stream (pathStencil/pathCover/stroke).
+    /// Vertex range in the flat stream (pathStencil/pathCover/stroke/sprite).
     var vertexStart: Int = 0
     var vertexCount: Int = 0
     /// Index range + base vertex in the mesh stream (mesh).
@@ -31,6 +34,8 @@ struct DrawCommand {
     var baseVertex: Int = 0
     /// Byte offset into the per-draw uniform buffer.
     var uniformOffset: Int
+    /// Bitmap source for `.sprite` commands.
+    var textureURL: String? = nil
 }
 
 struct FramePacket {
@@ -60,9 +65,13 @@ enum GeometryUploader {
                 appendMesh(mesh, into: &packet)
             }
         }
+        // Paths and sprites share 2D painter's order (snapshot order): a
+        // sprite added before a shape is painted over by it, and vice versa.
         for primitive in snapshot.primitives {
-            if case .path(let path) = primitive {
-                appendPath(path, into: &packet)
+            switch primitive {
+            case .path(let path): appendPath(path, into: &packet)
+            case .sprite(let sprite): appendSprite(sprite, into: &packet)
+            default: break
             }
         }
         return packet
@@ -177,6 +186,45 @@ enum GeometryUploader {
             indexCount: mesh.indices.count,
             baseVertex: baseVertex,
             uniformOffset: slot
+        ))
+    }
+
+    // MARK: Sprites (textured quads — the renderer resolves url → texture)
+
+    /// Six world-space corners (CPU-rotated about the center) in the UV-table
+    /// order vs_sprite expects (TL BL BR, TL BR TR), one uniform slot with
+    /// color.a = opacity and params.x = the quad's w/h for contain-fit.
+    private static func appendSprite(_ sprite: borrowing SpritePrimitive, into packet: inout FramePacket) {
+        guard sprite.size.x > 1e-6, sprite.size.y > 1e-6, sprite.opacity > 0.001 else { return }
+        let slot = appendUniformSlot(
+            model: .identity,
+            color: Color.white.with(opacity: Float(sprite.opacity)),
+            params: [Float32(sprite.size.x / sprite.size.y), 0, 0, 0],
+            into: &packet
+        )
+        let halfW = sprite.size.x / 2
+        let halfH = sprite.size.y / 2
+        let cosR = Real.cos(sprite.rotation)
+        let sinR = Real.sin(sprite.rotation)
+        let center = sprite.center   // locals only below — `sprite` is borrowed
+        func corner(_ x: Real, _ y: Real) -> Position {
+            Position(
+                center.x + x * cosR - y * sinR,
+                center.y + x * sinR + y * cosR,
+                center.z
+            )
+        }
+        let topLeft = corner(-halfW, halfH)
+        let bottomLeft = corner(-halfW, -halfH)
+        let bottomRight = corner(halfW, -halfH)
+        let topRight = corner(halfW, halfH)
+        let start = packet.flatVertices.count / 3
+        for vertex in [topLeft, bottomLeft, bottomRight, topLeft, bottomRight, topRight] {
+            appendFlat(vertex, into: &packet)
+        }
+        packet.commands.append(DrawCommand(
+            kind: .sprite, vertexStart: start, vertexCount: 6,
+            uniformOffset: slot, textureURL: sprite.url
         ))
     }
 
