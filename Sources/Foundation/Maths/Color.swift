@@ -34,6 +34,13 @@ public struct Color: Sendable, Hashable, CustomDebugStringConvertible {
     public static let teal = Color(hex: 0x5CD0B3)
     public static let pink = Color(hex: 0xD147BD)
     public static let background = Color(hex: 0x16161C)
+    /// The article page themes (`Document(background:)`): the warm paper white
+    /// the stock stylesheet is tuned to…
+    public static let documentLight = Color(hex: 0xFAF7F2)
+    /// …and its dark counterpart — same value as the scene default
+    /// `.background` (a separate knob on purpose), so an article page and any
+    /// embedded canvases share one dark.
+    public static let documentDark = Color(hex: 0x16161C)
 
     public func with(opacity: Float) -> Color {
         Color(r: r, g: g, b: b, a: a * opacity)

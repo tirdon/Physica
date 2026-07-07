@@ -8,6 +8,12 @@
 //
 // Adapted wholesale from the reference Medium-style article page. A consumer can
 // read `ArticleStyle.css` to reuse or override it.
+//
+// Every color the page uses is a `:root` variable (the `:root` block below IS
+// the light palette), so `theme(background:)` can restyle the whole article by
+// emitting one variable-override block — see `Document(background:)`.
+
+import PhysicaFoundation
 
 public enum ArticleStyle {
     /// The DOM id of the injected `<style>` element (used to dedupe re-renders).
@@ -16,7 +22,8 @@ public enum ArticleStyle {
     public static let css = #"""
   :root{
     --paper:#FAF7F2; --paper-2:#F0EBE1; --text:#2A2825; --text-2:#6E6A62; --text-3:#948F84;
-    --rule:#EAE4D8; --rule-2:#DDD6C7; --accent:#1A8917; --accent-soft:#E8F1E4;
+    --rule:#EAE4D8; --rule-2:#DDD6C7; --rule-soft:#ECE8E0; --accent:#1A8917; --accent-soft:#E8F1E4;
+    --card:#FFFFFF; --veil:rgba(250,247,242,.92); --underline:#C7C7C7;
     --serif:"Charter","Source Serif 4",Georgia,"Times New Roman",serif;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --mono:"SF Mono","Menlo","Monaco","Cascadia Code",ui-monospace,monospace;
@@ -32,7 +39,7 @@ public enum ArticleStyle {
 
   /* ---------- top bar ---------- */
   .topbar{
-    position:sticky; top:0; z-index:20; background:rgba(250,247,242,.92);
+    position:sticky; top:0; z-index:20; background:var(--veil);
     backdrop-filter:saturate(140%) blur(8px);
     border-bottom:1px solid var(--rule);
   }
@@ -55,7 +62,7 @@ public enum ArticleStyle {
   h1{
     font-family:var(--serif); font-weight:700;
     font-size:clamp(34px,5.2vw,46px); line-height:1.18; letter-spacing:-.019em;
-    margin:0 0 16px; color:#2A2825;
+    margin:0 0 16px; color:var(--text);
   }
   .subtitle{font-family:var(--serif); font-weight:400; font-size:22px; line-height:1.4;
     color:var(--text-2); margin:0 0 24px}
@@ -65,21 +72,21 @@ public enum ArticleStyle {
     background:linear-gradient(135deg,#1FA01B,#0E5A10); color:#fff; font-weight:700; font-family:var(--sans);
     display:flex; align-items:center; justify-content:center; font-size:15px}
   .byline .who{display:flex; flex-direction:column; line-height:1.4}
-  .byline .who .nm{color:#2A2825; font-weight:600}
+  .byline .who .nm{color:var(--text); font-weight:600}
   .byline .who .meta2 b{color:var(--text); font-weight:600}
   .abstract{font-size:21px; line-height:1.58; color:var(--text); margin:0 0 24px}
 
   p{margin:0 0 24px}
-  a{color:var(--text); text-decoration:underline; text-decoration-color:#C7C7C7; text-underline-offset:2px}
+  a{color:var(--text); text-decoration:underline; text-decoration-color:var(--underline); text-underline-offset:2px}
   a:hover{color:var(--accent); text-decoration-color:var(--accent)}
   em{font-style:italic}
   strong{font-weight:700}
   code{font-family:var(--mono); font-size:.8em; background:var(--paper-2);
-    border-radius:4px; padding:.08em .4em; color:#2A2825}
+    border-radius:4px; padding:.08em .4em; color:var(--text)}
 
   h2{
     font-family:var(--serif); font-weight:700; font-size:clamp(26px,3.4vw,30px); letter-spacing:-.015em;
-    line-height:1.25; margin:52px 0 6px; color:#2A2825; scroll-margin-top:66px;
+    line-height:1.25; margin:52px 0 6px; color:var(--text); scroll-margin-top:66px;
     display:flex; align-items:baseline; gap:12px;
   }
   h2 .sec{
@@ -87,14 +94,14 @@ public enum ArticleStyle {
     letter-spacing:0; flex:none;
   }
   h2 + p, h2 + .notation, h2 + .procedure, h2 + .mathblock{margin-top:14px}
-  h3{font-family:var(--sans); font-weight:700; font-size:17px; margin:32px 0 4px; color:#2A2825}
+  h3{font-family:var(--sans); font-weight:700; font-size:17px; margin:32px 0 4px; color:var(--text)}
   h4{font-family:var(--sans); font-weight:700; font-size:14.5px; letter-spacing:.01em;
     text-transform:uppercase; color:var(--text-2); margin:26px 0 4px}
 
   /* ---------- stat chips ---------- */
   .stats{display:flex; flex-wrap:wrap; gap:9px; margin:0 0 6px}
   .stat{
-    border:1px solid var(--rule-2); background:#fff; border-radius:9px;
+    border:1px solid var(--rule-2); background:var(--card); border-radius:9px;
     padding:8px 14px; display:flex; align-items:baseline; gap:8px;
   }
   .stat b{font-family:var(--serif); font-weight:600; font-size:19px; color:var(--accent); letter-spacing:-.01em}
@@ -137,7 +144,7 @@ public enum ArticleStyle {
   .procedure ol{list-style:none; counter-reset:ln; margin:10px 0 2px; padding:0}
   .procedure ol li{
     counter-increment:ln; position:relative; padding:4px 0 4px 40px; line-height:1.5;
-    border-top:1px dotted #ECE8E0;
+    border-top:1px dotted var(--rule-soft);
   }
   .procedure ol li:first-child{border-top:none}
   .procedure ol li::before{
@@ -215,4 +222,67 @@ public enum ArticleStyle {
     html{scroll-behavior:auto}
   }
 """#
+
+    // MARK: - Background themes (`Document(background:)`)
+
+    /// The DOM id of the theme-override `<style>` — a second element injected
+    /// after the base sheet (so its `:root` wins) and updated in place when a
+    /// re-render switches themes.
+    public static let themeElementID = "physica-article-theme"
+
+    /// A `:root` variable-override block for a page background. The palette is
+    /// picked by the background's luminance — `.documentDark` (or any dark
+    /// color) gets light ink and a brighter accent; a light color keeps the
+    /// stock warm-gray ink. `--paper` is the exact color given; its supporting
+    /// shades (code chips, stat cards, rules, the topbar veil) are derived from
+    /// it, so off-palette customs stay coherent. The default `.documentLight`
+    /// page never injects this (see `ArticleDOM.applyTheme`) — the hand-tuned
+    /// `:root` constants above stay authoritative there.
+    public static func theme(background: Color) -> String {
+        let paper = css(background)
+        let veil = veil(background)
+        if isDark(background) {
+            return """
+            :root{
+              --paper:\(paper); --paper-2:\(css(background.lighter(0.06)));
+              --text:#E9E7E1; --text-2:#A9A49B; --text-3:#7E7970;
+              --rule:\(css(background.lighter(0.09))); --rule-2:\(css(background.lighter(0.16)));
+              --rule-soft:\(css(background.lighter(0.12)));
+              --accent:#33B133; --accent-soft:#1B2B1C;
+              --card:\(css(background.lighter(0.045))); --veil:\(veil);
+              --underline:#514F58;
+            }
+            """
+        }
+        return """
+        :root{
+          --paper:\(paper); --paper-2:\(css(background.darker(0.045)));
+          --text:#2A2825; --text-2:#6E6A62; --text-3:#948F84;
+          --rule:\(css(background.darker(0.08))); --rule-2:\(css(background.darker(0.14)));
+          --rule-soft:\(css(background.darker(0.06)));
+          --accent:#1A8917; --accent-soft:#E8F1E4;
+          --card:#FFFFFF; --veil:\(veil);
+          --underline:#C7C7C7;
+        }
+        """
+    }
+
+    /// Perceived-luminance split (Rec. 709 weights on the stored sRGB values —
+    /// coarse, but themes only need the light/dark call).
+    private static func isDark(_ color: Color) -> Bool {
+        0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b < 0.5
+    }
+
+    private static func css(_ color: Color) -> String {
+        "rgb(\(channel(color.r)),\(channel(color.g)),\(channel(color.b)))"
+    }
+
+    /// The topbar's translucent backdrop: the paper color at the sheet's .92.
+    private static func veil(_ color: Color) -> String {
+        "rgba(\(channel(color.r)),\(channel(color.g)),\(channel(color.b)),.92)"
+    }
+
+    private static func channel(_ value: Float) -> Int {
+        Int((min(max(value, 0), 1) * 255).rounded())
+    }
 }

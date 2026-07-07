@@ -55,6 +55,7 @@ public enum ArticleDOM {
         host.innerHTML = .string("")
 
         ensureStyle(domObj)
+        applyTheme(domObj, background: document.background)
 
         let ctx = Ctx(dom: domObj)
 
@@ -108,6 +109,32 @@ public enum ArticleDOM {
         var style = dom.createElement!("style")
         style.id = .string(ArticleStyle.elementID)
         style.textContent = .string(ArticleStyle.css)
+        var head = dom.head
+        if head.object != nil {
+            _ = head.appendChild(style)
+        } else {
+            var root = dom.documentElement
+            if root.object != nil { _ = root.appendChild(style) }
+        }
+    }
+
+    /// Upserts the theme-override `<style>` for `Document(background:)`, after
+    /// the base sheet so its `:root` wins. The default `.documentLight` emits
+    /// nothing (the base sheet's hand-tuned constants stay authoritative — and
+    /// the stock article stays byte-identical); a re-render with a different
+    /// background updates the element in place, so themes can switch.
+    private static func applyTheme(_ dom: JSObject, background: Color) {
+        let override = background == .documentLight
+            ? "" : ArticleStyle.theme(background: background)
+        var existing = dom.getElementById!(ArticleStyle.themeElementID)
+        if existing.object != nil {
+            existing.textContent = .string(override)
+            return
+        }
+        guard !override.isEmpty else { return }
+        var style = dom.createElement!("style")
+        style.id = .string(ArticleStyle.themeElementID)
+        style.textContent = .string(override)
         var head = dom.head
         if head.object != nil {
             _ = head.appendChild(style)

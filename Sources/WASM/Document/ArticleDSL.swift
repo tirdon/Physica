@@ -56,6 +56,7 @@
 // rest of the model can keep its `Sendable` conformance for documents that
 // don't use this escape hatch.
 
+import PhysicaFoundation
 import PhysicaKernel
 
 // MARK: - Leaf value types
@@ -188,9 +189,14 @@ public struct Document: Sendable {
     public var sections: [Section]
     /// Page title when the facade auto-mounts ("" = leave the page's own).
     public var title: String
+    /// The page background theme: `.documentLight` (default, the stock warm
+    /// paper) or `.documentDark` — any `Color` works, the palette derives from
+    /// its luminance (`ArticleStyle.theme(background:)`).
+    public var background: Color
 
-    public init(@DocumentBuilder _ content: () -> [Section]) {
+    public init(background: Color = .documentLight, @DocumentBuilder _ content: () -> [Section]) {
         self.title = ""
+        self.background = background
         self.sections = content()
     }
 
@@ -198,10 +204,12 @@ public struct Document: Sendable {
     /// page — `Document("Physics · Rigid bodies") { Title(…); Chapter(…) { … } }`
     /// as a bare statement renders the article (outline logged first, MathJax
     /// injected, `ArticleDOM` walked). On the host it just builds the value, so
-    /// authoring code stays host-typecheckable.
+    /// authoring code stays host-typecheckable. `background: .documentDark`
+    /// flips the page to the dark palette.
     @discardableResult
-    public init(_ title: String, @DocumentBuilder _ content: () -> [Section]) {
+    public init(_ title: String, background: Color = .documentLight, @DocumentBuilder _ content: () -> [Section]) {
         self.title = title
+        self.background = background
         self.sections = content()
         #if os(WASI)
         DocumentAutoMount.schedule(self)
