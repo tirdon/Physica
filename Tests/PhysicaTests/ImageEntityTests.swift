@@ -72,6 +72,36 @@ import Testing
         #expect(abs((images.first?.opacity ?? 0) - 1) < 1e-3)
     }
 
+    @Test func imagesAreTappableAndDraggable() {
+        // Hit-testing runs on worldBounds, which `localBounds` supplies — so
+        // the ordinary interaction components work on a bitmap unchanged.
+        let scene = Scene()
+        var tapped = false
+        var dragBegan = false
+        let card = Image("card.png", width: 2)
+        card.position = Position(2, 0, 0)
+        card.components[DraggableComponent.self] = DraggableComponent(
+            payload: .tag("card"),
+            onTap: { _ in tapped = true },
+            onDragBegan: { _ in dragBegan = true })
+        scene.add(card)
+        scene.seek(to: 0)
+
+        // Press + release inside the 2×2 box, within the slop → tap.
+        scene.dispatch(.pointerDown(Position(2.6, 0.6, 0)))
+        scene.dispatch(.pointerUp(Position(2.6, 0.6, 0)))
+        #expect(tapped)
+        #expect(!dragBegan)
+
+        // Past the slop → drag, and the box follows the pointer.
+        scene.dispatch(.pointerDown(Position(2, 0, 0)))
+        scene.dispatch(.pointerMoved(Position(3, 1, 0)))
+        #expect(dragBegan)
+        #expect(abs(card.position.x - 3) < tolerance)
+        #expect(abs(card.position.y - 1) < tolerance)
+        scene.dispatch(.pointerUp(Position(3, 1, 0)))
+    }
+
     @Test func emojiGlyphsKeepANilURL() {
         let scene = Scene()
         // Font.default is empty — emoji lay out anyway; .shown() reveals
