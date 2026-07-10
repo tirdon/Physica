@@ -40,9 +40,10 @@ enum FontLoaderError: Error {
 
 @MainActor
 public enum FontLoader {
-    /// Default demo face — a glyf-based TrueType file on a versioned CDN.
-    public static let defaultURL =
-        "https://cdn.jsdelivr.net/npm/@expo-google-fonts/roboto@0.2.3/Roboto_400Regular.ttf"
+    /// Default face — Computer Modern Unicode Serif, the same file as
+    /// ``computerModernURL``, so plain `Text(...)` and math formulas share one
+    /// serif. Override per page with `Config.defaultFont(try await Font.load(url))`.
+    public static let defaultURL = computerModernURL
 
     /// Computer Modern Unicode Serif (`cmunrm`) — LaTeX's body face, as a glyf
     /// TrueType the pure-Swift `Font` parser handles. Pinned to a commit so the

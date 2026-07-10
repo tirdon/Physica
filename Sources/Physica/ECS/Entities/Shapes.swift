@@ -11,7 +11,7 @@ public struct PathComponent: Component {
     /// 0...1 — how much of the stroke is revealed (arc-length ordered).
     public var strokeProgress: Real
     /// 0...1 — trims the stroke's tail: only the span strokeStart...strokeProgress
-    /// is drawn (highlight's chasing loop). 0 = whole stroke from its start.
+    /// is drawn. 0 = whole stroke from its start.
     public var strokeStart: Real
     /// 0...1 — multiplies fill alpha (Write fades fill in after the stroke).
     public var fillOpacityFactor: Real

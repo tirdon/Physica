@@ -339,11 +339,11 @@ import Testing
         scene.seek(to: 0)
 
         scene.dispatch(.doubleClick(Position(1, 0, 0)))
-        // The neon loop runs NOW on the interaction layer (works while paused).
+        // The circumscribe runs NOW on the interaction layer (works while paused).
         #expect(!scene.interactions.isIdle)
         #expect(scene.entities.contains { $0.name == "highlight" })
 
-        scene.update(deltaTime: 1.3) // past the 1.2 s default lap
+        scene.update(deltaTime: 1.3) // past the 1.2 s default duration
         #expect(scene.interactions.isIdle)
         #expect(!scene.entities.contains { $0.name == "highlight" }) // border cleaned up
     }

@@ -21,6 +21,7 @@ import PhysicaKernel
 import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
+import PhysicaArticle
 
 #if os(WASI)
 import JavaScriptKit

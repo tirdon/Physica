@@ -22,6 +22,7 @@ struct Example3 {
 	static func main() {
 		#if os(WASI)
 		JavaScriptEventLoop.installGlobalExecutor()
+		DocumentAutoMount.install()   // wire the bare-statement auto-mount hook
 		Task { @MainActor in
 			// no font load — the facade owns the faces
 			_ = makeDocument()   // the Document facade init auto-mounts

@@ -12,13 +12,23 @@ import PhysicaKernel
 import PhysicaCharts
 import PhysicaPhysics
 import PhysicaEquationGame
+import PhysicaArticle
 
 #if os(WASI)
 import JavaScriptKit
 import JavaScriptEventLoop   // JSPromise.value() lives there (CLAUDE.md gotcha)
 
-enum DocumentAutoMount {
-    /// Called from `Document.init(_:_:)` (nonisolated); hops to the main actor.
+public enum DocumentAutoMount {
+    /// Wires `Document.autoMount` to this DOM mounter, so a bare
+    /// `Document("title") { … }` statement renders itself. Call once at startup
+    /// before building any facade `Document` (the model lives in the JSKit-free
+    /// `PhysicaArticle` target and can't name this mounter directly, hence the
+    /// hook). Idempotent.
+    public static func install() {
+        Document.autoMount = { schedule($0) }
+    }
+
+    /// Called via the `Document.autoMount` hook (nonisolated); hops to the main actor.
     static func schedule(_ document: Document) {
         Task { @MainActor in
             await mount(document)

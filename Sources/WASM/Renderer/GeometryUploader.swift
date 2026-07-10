@@ -310,7 +310,7 @@ enum GeometryUploader {
 
         // Continuous trim window [strokeStart, strokeProgress]: whole quads
         // plus fractional ends on the boundary segments, so draw grows, erase
-        // retracts, and the highlight tail chases smoothly along a side.
+        // retracts, and a trimmed tail slides smoothly along a side.
         // Integer-only capping pops whole segments — invisible on a flattened
         // circle (~100 segments), glaring on a 3-segment triangle.
         let head = min(max(path.strokeProgress, 0), 1)

@@ -30,6 +30,19 @@ public extension Animation {
     static func erase(_ shape: PathEntity) -> Animation {
         Animation(pairs: [AnimationPair(target: shape, blueprint: DrawBlueprint(reversed: true))])
     }
+
+    /// Optional-tolerant `.draw`: nil shape → nil animation (`scene.play`
+    /// drops it, enqueueing nothing).
+    static func draw(_ shape: PathEntity?) -> Animation? {
+        guard let shape else { return nil }
+        return draw(shape)  // non-optional overload wins resolution, promotes to Animation?
+    }
+
+    /// Optional-tolerant `.erase` for shapes.
+    static func erase(_ shape: PathEntity?) -> Animation? {
+        guard let shape else { return nil }
+        return erase(shape)
+    }
 }
 
 struct PathMorphBlueprint: AnimationBlueprint {

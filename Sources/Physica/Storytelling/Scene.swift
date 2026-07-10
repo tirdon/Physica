@@ -230,6 +230,16 @@ public final class Scene: Identifiable {
         addItems(items)
     }
 
+    /// Optional-tolerant `add`: nil items are dropped; if nothing remains,
+    /// nothing is enqueued and the result is nil. Optionally-present content
+    /// (`try?` math, an optional face's labels) flows through without `if let`.
+    @discardableResult
+    public func add(_ items: (any Animatable)?...) -> Animation? {
+        let present = items.compactMap { $0 }
+        guard !present.isEmpty else { return nil }
+        return addItems(present)
+    }
+
     package func addItems(_ items: [any Animatable]) -> Animation {
         var entities: [Entity] = []
         var seen = Set<UInt64>()
@@ -299,6 +309,33 @@ public final class Scene: Identifiable {
         easing: Easing? = nil
     ) -> Animation {
         playItems(items, for: duration, easing: easing)
+    }
+
+    /// Optional-tolerant `play`: nil items are dropped. All nil → nothing is
+    /// enqueued (no clip, no time passes — exactly what an `if let` guard did)
+    /// and the result is nil.
+    @discardableResult
+    public func play(
+        _ items: (any Animatable)?...,
+        for duration: Duration? = nil,
+        easing: Easing? = nil
+    ) -> Animation? {
+        let present = items.compactMap { $0 }
+        guard !present.isEmpty else { return nil }
+        return playItems(present, for: duration, easing: easing)
+    }
+
+    /// Optional concrete overload — leading-dot factories with optional content:
+    /// `scene.play(.write(formula), for: 2.5.s)` where `formula: TextEntity?`.
+    @discardableResult
+    public func play(
+        _ items: Animation?...,
+        for duration: Duration? = nil,
+        easing: Easing? = nil
+    ) -> Animation? {
+        let present = items.compactMap { $0 }
+        guard !present.isEmpty else { return nil }
+        return playItems(present.map { $0 }, for: duration, easing: easing)
     }
 
     /// Spec alias: `scene.play(group: a1, .init(...))` — offsets/durations respected.

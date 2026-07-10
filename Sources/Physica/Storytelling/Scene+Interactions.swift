@@ -40,6 +40,38 @@ extension Scene {
         interactItems(items, for: duration, easing: easing, onInterrupt: onInterrupt, owner: owner, completion: completion)
     }
 
+    /// Optional-tolerant `interact`: nil items are dropped. All nil → nothing
+    /// runs (completion included) and the result is nil.
+    @discardableResult
+    public func interact(
+        _ items: (any Animatable)?...,
+        for duration: Duration? = nil,
+        easing: Easing? = nil,
+        onInterrupt: InterruptionPolicy = .complete,
+        owner: Entity? = nil,
+        completion: (@MainActor () -> Void)? = nil
+    ) -> InteractionRunner.Handle? {
+        let present = items.compactMap { $0 }
+        guard !present.isEmpty else { return nil }
+        return interactItems(present, for: duration, easing: easing, onInterrupt: onInterrupt, owner: owner, completion: completion)
+    }
+
+    /// Optional concrete overload — leading-dot factories with optional content:
+    /// `scene.interact(.shake(maybeToken))`.
+    @discardableResult
+    public func interact(
+        _ items: Animation?...,
+        for duration: Duration? = nil,
+        easing: Easing? = nil,
+        onInterrupt: InterruptionPolicy = .complete,
+        owner: Entity? = nil,
+        completion: (@MainActor () -> Void)? = nil
+    ) -> InteractionRunner.Handle? {
+        let present = items.compactMap { $0 }
+        guard !present.isEmpty else { return nil }
+        return interactItems(present.map { $0 }, for: duration, easing: easing, onInterrupt: onInterrupt, owner: owner, completion: completion)
+    }
+
     func interactItems(
         _ items: [any Animatable],
         for duration: Duration?,

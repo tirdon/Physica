@@ -69,6 +69,57 @@ struct UpdaterTests {
         #expect(follower.end == Position(4, -1, 0))
     }
 
+    @Test func positionBindConvertsIntoTargetLocalSpace() {
+        // Position binds are world-aware: once the target has its own
+        // transform (a group move, say), the source's world position lands
+        // converted into the target's local space.
+        let scene = Scene()
+        let follower = Segment()
+        let leader = Entity()
+        scene.insert(follower)
+        scene.insert(leader)
+
+        follower.bind(\.end, to: leader, \.position)
+        leader.position = Position(4, -1, 0)
+        follower.position = Position(1, 1, 0)
+        scene.update(deltaTime: 0.016)
+        #expect(follower.end == Position(3, -2, 0))
+    }
+
+    @Test func positionBindReadsSourceInParentSpace() {
+        // `position` lives in the parent's space; the bind carries it to world
+        // through the parent chain before converting into the target.
+        let scene = Scene()
+        let follower = Segment()
+        let cart = Group()
+        let leader = Entity()
+        cart.addChild(leader)
+        cart.position = Position(10, 0, 0)
+        leader.position = Position(1, 2, 0)
+        scene.insert(follower)
+        scene.insert(cart)
+
+        follower.bind(\.end, to: leader, \.position)
+        scene.update(deltaTime: 0.016)
+        #expect(follower.end == Position(11, 2, 0))
+    }
+
+    @Test func bindFollowsAnimationHandleTarget() {
+        // `let bob = Circle().move(to: p)` stays usable as a bind source: the
+        // bind resolves to the handle's first animation target.
+        let scene = Scene()
+        let follower = Segment()
+        let leader = Entity()
+        let handle = leader.shift(1.i)
+        scene.insert(follower)
+        scene.insert(leader)
+
+        follower.bind(\.end, to: handle, \.position)
+        leader.position = Position(2, 5, 0)
+        scene.update(deltaTime: 0.016)
+        #expect(follower.end == Position(2, 5, 0))
+    }
+
     @Test func addAndRemoveSpecificUpdater() {
         let scene = Scene()
         let follower = Segment()

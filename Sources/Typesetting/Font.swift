@@ -18,6 +18,14 @@ public struct Font: Sendable {
         public let advance: Real
         /// Outline in em units, origin at baseline/left.
         public let path: Path
+
+        /// Public so a platform font provider outside this module (the macOS
+        /// CoreText baker) can build glyphs for the dictionary-backed `Font`.
+        public init(index: Int, advance: Real, path: Path) {
+            self.index = index
+            self.advance = advance
+            self.path = path
+        }
     }
 
     public let unitsPerEm: Real
@@ -31,6 +39,20 @@ public struct Font: Sendable {
     private let locaOffsets: [Int]
     private let advances: [Real]
     private let cmap: CharacterMap
+
+    /// Pre-baked glyph tables — the second, dictionary-backed representation
+    /// (nil for a TrueType-parsed face). A platform layer that builds outlines
+    /// through a system rasterizer (`CTFontCreatePathForGlyph` on macOS) rather
+    /// than the glyf parser fills this; lookups consult it first. The struct
+    /// stays Sendable and the TTF path is untouched (`baked == nil` there).
+    private let baked: BakedTable?
+
+    struct BakedTable: Sendable {
+        /// scalar value → glyph (what `glyph(for:)`/`glyphIndex(for:)` read).
+        let byScalar: [UInt32: Glyph]
+        /// glyph id → glyph (what `glyph(at:)` reads).
+        let byIndex: [Int: Glyph]
+    }
 
     /// The absent face: zero glyphs, every lookup misses. Backs `Font.default`
     /// when no face is registered — text laid out with it degrades to an
@@ -48,6 +70,39 @@ public struct Font: Sendable {
         locaOffsets = []
         advances = []
         cmap = .empty
+        baked = nil
+    }
+
+    /// Dictionary-backed face — glyphs baked outside the TTF parser (keyed by
+    /// Unicode scalar, in em units, y-up, exactly like the glyf path). `advance`
+    /// and outlines are em units; `ascender`/`descender` em units (descender
+    /// negative). `glyphCount` reports the baked glyph count; the raw-table
+    /// members stay empty so the glyf parser is never entered for this face.
+    /// Backs the macOS CoreText provider (`Sources/PhysicaApp/CoreTextFont`).
+    public init(
+        glyphs: [Unicode.Scalar: Glyph],
+        unitsPerEm: Real,
+        ascender: Real,
+        descender: Real
+    ) {
+        self.unitsPerEm = unitsPerEm
+        self.ascender = ascender
+        self.descender = descender
+        var byScalar: [UInt32: Glyph] = [:]
+        var byIndex: [Int: Glyph] = [:]
+        byScalar.reserveCapacity(glyphs.count)
+        byIndex.reserveCapacity(glyphs.count)
+        for (scalar, glyph) in glyphs {
+            byScalar[scalar.value] = glyph
+            byIndex[glyph.index] = glyph
+        }
+        self.glyphCount = byIndex.count
+        self.baked = BakedTable(byScalar: byScalar, byIndex: byIndex)
+        self.data = []
+        self.glyfOffset = 0
+        self.locaOffsets = []
+        self.advances = []
+        self.cmap = .empty
     }
 
     public init(data: [UInt8]) throws {
@@ -122,6 +177,7 @@ public struct Font: Sendable {
 
         guard let glyf = tables["glyf"] else { throw FontError.missingTable("glyf") }
         self.glyfOffset = glyf.offset
+        self.baked = nil
 
         // cmap — prefer format 12, fall back to format 4
         var cmapTable = try table("cmap")
@@ -150,16 +206,24 @@ public struct Font: Sendable {
     // MARK: Lookup
 
     public func glyphIndex(for scalar: Unicode.Scalar) -> Int? {
+        if let baked { return baked.byScalar[scalar.value]?.index }
         let index = cmap.glyphIndex(for: UInt32(scalar.value))
         return index == 0 ? nil : index
     }
 
     public func glyph(for scalar: Unicode.Scalar) -> Glyph? {
+        if let baked { return baked.byScalar[scalar.value] }
         guard let index = glyphIndex(for: scalar) else { return nil }
         return try? glyph(at: index)
     }
 
     public func glyph(at index: Int) throws -> Glyph {
+        if let baked {
+            guard let glyph = baked.byIndex[index] else {
+                throw FontError.malformed("glyph index \(index)")
+            }
+            return glyph
+        }
         guard index >= 0, index < glyphCount else {
             throw FontError.malformed("glyph index \(index)")
         }

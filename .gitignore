@@ -8,3 +8,4 @@ DerivedData/
 .netrc
 js*/
 node_modules/
+scripts/

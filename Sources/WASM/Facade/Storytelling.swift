@@ -118,22 +118,29 @@ public struct Storytelling {
     /// log and boot.
     static func loadDefaultFonts() async {
         let needsBody = FontBook.fallback == nil
+        let needsMath = !FontBook.hasRegistration(for: .math)
+        // The body default and the math face are the same serif file — when
+        // both roles are unfilled, the one body fetch covers math too.
+        let mathRidesBody = needsBody && FontLoader.computerModernURL == FontLoader.defaultURL
         async let bodyFace = fetchIfNeeded(needsBody, url: FontLoader.defaultURL)
         async let mathFace = fetchIfNeeded(
-            !FontBook.hasRegistration(for: .math), url: FontLoader.computerModernURL
+            needsMath && !mathRidesBody, url: FontLoader.computerModernURL
         )
         async let monoFace = fetchIfNeeded(
             !FontBook.hasRegistration(for: .mono), url: FontLoader.monoURL
         )
 
-        if let font = await bodyFace {
+        let body = await bodyFace
+        if let font = body {
             FontBook.fallback = font
         } else if needsBody {
             _ = JSObject.global.console.warn(
                 "Physica: default font unavailable — Text() degrades to empty glyphs"
             )
         }
-        if let font = await mathFace { FontBook.register(font, for: .math) }
+        if needsMath, let font = (await mathFace) ?? (mathRidesBody ? body : nil) {
+            FontBook.register(font, for: .math)
+        }
         if let font = await monoFace { FontBook.register(font, for: .mono) }
     }
 

@@ -62,10 +62,9 @@ enum PendulumDemo {
         let center = pivot.center
         let string = Line(start: center, end: center - 4.j)
         let bob = Circle().move(to: string.end)
-        string.updater = { [weak bob = bob.animationTargets.first] line in
-            guard let bob else { return }
-            line.end = line.convert(worldPosition: bob.position)
-        }
+        // Position binds are world-aware (bob's world position lands in the
+        // line's local space), and the Animation handle resolves to the circle.
+        string.bind(\.end, to: bob, \.position)
         scene.add(pivot, string, bob)
         scene.play(bob.move(to: 1.i + 1.j), for: 2.s)
         scene.play(bob.move(to: .origin))
@@ -75,13 +74,12 @@ enum PendulumDemo {
         //      overhead while the pendulum swings (MathJax → SVG → glyph paths) ----
         string.components[PendulumComponent.self] = PendulumComponent(.string, string)
         bob.components[PendulumComponent.self] = PendulumComponent(.bob, bob.animationTargets[0])
-        if let formula {
-            formula.textured(.pencil)
-            formula.position = Position(0, 2.35, 0)
-            scene.play(.write(formula), for: 2.5.s)
-            // Highlight the nonlinearity — "sin θ" is the last four glyphs.
-            scene.play(formula[(formula.glyphCount - 4)...].color(.teal), for: 0.5.s)
-        }
+        // No MathJax (headless smoke) → formula is nil and both plays enqueue
+        // nothing — optional-tolerant `play` replaces the old `if let` guard.
+        formula?.textured(.pencil).position = Position(0, 2.35, 0)
+        scene.play(.write(formula), for: 2.5.s)
+        // Highlight the nonlinearity — "sin θ" is the last four glyphs.
+        scene.play(formula?.suffix(4).color(.teal), for: 0.5.s)
         scene.wait(3.s)                                        // swing freely
         scene.pause(PendulumSystem.self)                       // frozen for 1 s, then resumes
         scene.wait(1.5.s)
@@ -105,31 +103,26 @@ enum PendulumDemo {
         scene.play(pendulum.restoreState())
         scene.wait(0.7.s)
 
-        // ---- Hand off: pendulum fades while its equation unwrites ----
-        if let formula {
-            scene.play(
-                .erase(formula),
-                pivot.fade(to: 0), string.fade(to: 0), bob.fade(to: 0),
-                for: 0.8.s
-            )
-        } else {
-            scene.play(pivot.fade(to: 0), string.fade(to: 0), bob.fade(to: 0), for: 0.6.s)
-        }
+        // ---- Hand off: pendulum fades while its equation unwrites (without a
+        //      formula the erase simply drops out of the clip) ----
+        scene.play(
+            .erase(formula),
+            pivot.fade(to: 0), string.fade(to: 0), bob.fade(to: 0),
+            for: 0.8.s
+        )
 
-        // ---- Text write (no scene.add — .write introduces the entity) ----
-        var title: TextEntity?
-        if let font {
-            let text = TextEntity("Physica", font: font, fontSize: 1.2, color: .white)
-                .textured(.chalk)
-            text.position = Position(0, 2.3, 0)
-            scene.play(.write(text))
-            // Per-glyph gradient sweep, chalk grain intact.
-            scene.play(text.color(mix: [.blue, .teal, .purple]), for: 0.8.s)
-            // Neon chase around the title: one lap, tail catches the head.
-            scene.play(.highlight(text), for: 1.4.s)
-            scene.wait(0.5.s)
-            title = text
-        }
+        // ---- Text write (no scene.add — .write introduces the entity; the
+        //      facade already loaded the default faces, so the optional font
+        //      needs no guard — TextEntity falls back to `Font.default`) ----
+        let title = TextEntity("Physica", font: font, fontSize: 1.2, color: .white)
+            .textured(.chalk)
+        title.position = Position(0, 2.3, 0)
+        scene.play(.write(title))
+        // Per-glyph gradient sweep, chalk grain intact.
+        scene.play(title.color(mix: [.blue, .teal, .purple]), for: 0.8.s)
+        // Neon circumscribe around the title: draw on, hold, fade out.
+        scene.play(.highlight(title), for: 1.4.s)
+        scene.wait(0.5.s)
 
         // ---- Path morph chain (.draw introduces the entity too) ----
         let shape = Circle(radius: 0.9, color: .blue).stroke(.white, width: 0.035)
@@ -182,9 +175,7 @@ enum PendulumDemo {
         scene.wait(5.s)
 
         // ---- Bookend: unwrite the title ----
-        if let title {
-            scene.play(.erase(title))
-        }
+        scene.play(.erase(title))
 
         // ---- Charts: a Plane with animatable data — graph, field, streamlines.
         //      Position the plane before sampling: graphs copy its transform

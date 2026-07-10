@@ -17,6 +17,16 @@ public extension Animation {
             AnimationPair(target: $0, blueprint: blueprint)
         })
     }
+
+    /// Optional-tolerant `.shake`: nil target → nil animation.
+    static func shake(_ target: (any Animatable)?, amplitude: Real = 0.18, cycles: Real = 3) -> Animation? {
+        guard let target else { return nil }
+        // The `: Animation` annotation is load-bearing: it disambiguates the
+        // non-optional `shake` overload from this optional one (existential arg
+        // makes both viable otherwise).
+        let animation: Animation = shake(target, amplitude: amplitude, cycles: cycles)
+        return animation
+    }
 }
 
 struct ShakeBlueprint: AnimationBlueprint {

@@ -13,6 +13,10 @@ let package = Package(
 		.library(name: "Physica", targets: ["Physica"]),
 		.library(name: "Typesetting", targets: ["Typesetting"]),
 		.library(name: "WASM", targets: ["WASM"]),
+		// Native macOS presentation stack (Metal renderer + CoreText fonts +
+		// AppKit runtime + facade) — the sibling of `WASM`, on the same kernel
+		// layers, with no JavaScriptKit dependency.
+		.library(name: "PhysicaApp", targets: ["PhysicaApp"]),
 	],
 	dependencies: [.package(url: "https://github.com/swiftwasm/JavaScriptKit.git", branch: "main" )],
     targets: [
@@ -67,13 +71,25 @@ let package = Package(
 			dependencies: ["PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting", "PhysicaKernel"],
 			path: "Sources/Physica/EquationGame"
 		),
+
+		// ---- PhysicaArticle (the document model + static HTML serializer) ------
+		// The platform-neutral article layer: the `Document` DSL/value model,
+		// the stylesheet, the plain-text outline, and `ArticleHTML` (Document →
+		// one self-contained HTML string). NO JavaScriptKit, so both the WASI DOM
+		// renderer (PhysicaWeb) and the native writer (PhysicaApp) depend on it.
+		.target(
+			name: "PhysicaArticle",
+			dependencies: ["PhysicaFoundation", "PhysicaKernel"],
+			path: "Sources/Article"
+		),
+
 		// Umbrella: `@_exported import` of every layer.
 		.target(
 			name: "Physica",
 			dependencies: [
 				"PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting",
 				"PhysicaKernel", "PhysicaCharts", "PhysicaPhysics",
-				"PhysicaEquationGame", "PhysicaWeb",
+				"PhysicaEquationGame", "PhysicaArticle", "PhysicaWeb",
 			],
 			path: "Sources/Physica/Umbrella"
 		),
@@ -89,6 +105,7 @@ let package = Package(
 			dependencies: [
 				"PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting",
 				"PhysicaKernel", "PhysicaCharts", "PhysicaPhysics", "PhysicaEquationGame",
+				"PhysicaArticle",
 				.product(name: "JavaScriptKit", package: "JavaScriptKit"),
 				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
 			],
@@ -107,12 +124,27 @@ let package = Package(
 			path: "Sources/WASM/Umbrella"
 		),
 
+		// ---- PhysicaApp product (native macOS: Metal + CoreText + AppKit) -----
+		// Every Swift file here is `#if os(macOS)` (the umbrella re-exports are
+		// the exception). Depends on the kernel layers directly — NOT on
+		// `Physica`/`PhysicaWeb`, so JavaScriptKit never enters the graph.
+		.target(
+			name: "PhysicaApp",
+			dependencies: [
+				"PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting",
+				"PhysicaKernel", "PhysicaCharts", "PhysicaPhysics", "PhysicaEquationGame",
+				"PhysicaArticle",
+			],
+			path: "Sources/PhysicaApp"
+		),
+
         .testTarget(
             name: "PhysicaTests",
             dependencies: [
 				"Physica",
 				"PhysicaFoundation", "PhysicaAlgebra", "PhysicaTypesetting",
 				"PhysicaKernel", "PhysicaCharts", "PhysicaPhysics", "PhysicaEquationGame",
+				"PhysicaArticle",
 			]
         ),
 
@@ -173,6 +205,26 @@ let package = Package(
         .testTarget(
             name: "StoryStudioTests",
             dependencies: ["StoryStudio"]
+        ),
+
+			// Native macOS demo executables on the Metal/CoreText/AppKit stack,
+			// each its own bundle under Sources/MetalApp/. AppExample0 opens the
+			// pendulum window (`swift run AppExample0`); AppExample1 writes the
+			// Document DSL to a single HTML file (`swift run AppExample1` →
+			// article.html) — the native sibling of the wasm Example3.
+        .executableTarget(
+            name: "AppExample0",
+				dependencies: ["PhysicaApp"],
+				path: "Sources/MetalApp/AppExample0"
+        ),
+        .executableTarget(
+            name: "AppExample1",
+				dependencies: ["PhysicaApp"],
+				path: "Sources/MetalApp/AppExample1"
+        ),
+        .testTarget(
+            name: "PhysicaAppTests",
+            dependencies: ["PhysicaApp", "PhysicaTypesetting"]
         ),
     ],
     swiftLanguageModes: [.v6]

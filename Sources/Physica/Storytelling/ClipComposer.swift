@@ -18,15 +18,7 @@ public final class ClipComposer {
         offset: Duration? = nil,
         easing: Easing? = nil
     ) -> Animation {
-        let base = item as? Animation
-        let animation = Animation(
-            pairs: item.carriedBlueprints,
-            duration: duration ?? base?.duration,
-            offset: offset ?? base?.offset ?? .zero,
-            easing: easing ?? base?.easing
-        )
-        animations.append(animation)
-        return animation
+        append(item, for: duration, offset: offset, easing: easing)
     }
 
     /// Concrete overload so leading-dot factories resolve:
@@ -38,7 +30,48 @@ public final class ClipComposer {
         offset: Duration? = nil,
         easing: Easing? = nil
     ) -> Animation {
-        add(animation as any Animatable, for: duration, offset: offset, easing: easing)
+        append(animation, for: duration, offset: offset, easing: easing)
+    }
+
+    /// Optional-tolerant composer add: a nil item contributes nothing.
+    @discardableResult
+    public func add(
+        _ item: (any Animatable)?,
+        for duration: Duration? = nil,
+        offset: Duration? = nil,
+        easing: Easing? = nil
+    ) -> Animation? {
+        guard let item else { return nil }
+        return append(item, for: duration, offset: offset, easing: easing)
+    }
+
+    /// Optional concrete overload — `clip.add(.write(formula), for: 1.s)` with
+    /// `formula: TextEntity?`.
+    @discardableResult
+    public func add(
+        _ animation: Animation?,
+        for duration: Duration? = nil,
+        offset: Duration? = nil,
+        easing: Easing? = nil
+    ) -> Animation? {
+        guard let animation else { return nil }
+        return append(animation, for: duration, offset: offset, easing: easing)
+    }
+
+    /// The single worker behind every `add` overload (non-overloaded on
+    /// purpose, so the optional forwards can never re-enter themselves).
+    private func append(
+        _ item: any Animatable, for duration: Duration?, offset: Duration?, easing: Easing?
+    ) -> Animation {
+        let base = item as? Animation
+        let animation = Animation(
+            pairs: item.carriedBlueprints,
+            duration: duration ?? base?.duration,
+            offset: offset ?? base?.offset ?? .zero,
+            easing: easing ?? base?.easing
+        )
+        animations.append(animation)
+        return animation
     }
 }
 

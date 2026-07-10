@@ -172,8 +172,8 @@ public final class Timeline {
         nextStreamID += 1
         return AsyncStream(bufferingPolicy: .unbounded) { continuation in
             continuations[id] = continuation
-            continuation.onTermination = { _ in
-                Task { @MainActor [weak self] in
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in
                     self?.continuations[id] = nil
                 }
             }

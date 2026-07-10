@@ -17,6 +17,29 @@ private func makeText(glyphs count: Int) -> TextEntity {
 
 @Suite @MainActor
 struct GlyphSliceTests {
+    @Test func suffixAndPrefixClampLikeSlices() {
+        let text = makeText(glyphs: 6)
+        #expect(text.suffix(2).range.lowerBound == 4)
+        #expect(text.suffix(2).range.upperBound == Int.max)
+        #expect(text.suffix(10).range.lowerBound == 0)  // clamps, no trap
+        #expect(text.prefix(2).range == 0..<2)
+        #expect(text.prefix(-3).range.isEmpty)
+    }
+
+    @Test func suffixColorsOnlyTrailingGlyphs() {
+        let scene = Scene()
+        let text = makeText(glyphs: 4)
+        scene.add(text)
+        scene.play(text.suffix(2).color(.red), for: 1.s)
+
+        scene.update(deltaTime: 1.5)
+        let glyphs = text.textComponent.glyphs
+        #expect(glyphs[0].color == nil)
+        #expect(glyphs[1].color == nil)
+        #expect(glyphs[2].color == .red)
+        #expect(glyphs[3].color == .red)
+    }
+
     @Test func sliceColorAnimatesAndRewindsToInherit() {
         let scene = Scene()
         let text = makeText(glyphs: 3)

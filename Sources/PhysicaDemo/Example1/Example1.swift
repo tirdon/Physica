@@ -24,7 +24,7 @@ struct Example1 {
         // The facade mount loads fonts + MathJax before running the closure,
         // so the swing-equation formula renders synchronously here; `try?`
         // degrades to nil without MathJax (headless smoke) — the demo skips math.
-        Storytelling(name: "pendulum") { scene in
+		Storytelling(name: "pendulum") { scene -> Void in
             let formula = try? MathJaxLoader.formulaNow(
                 "\\ddot{\\theta} = -\\frac{g}{\\ell}\\,\\sin\\theta", fontSize: 0.75
             )

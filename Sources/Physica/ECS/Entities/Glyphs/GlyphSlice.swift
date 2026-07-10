@@ -1,5 +1,5 @@
 // Glyph slices — Manim-style indexing into text and formulas:
-// `title[0]`, `title[1..<4]`, `formula[(formula.glyphCount - 4)...]`.
+// `title[0]`, `title[1..<4]`, `formula.suffix(4)` (= `formula[(formula.glyphCount - 4)...]`).
 // Slices return deferred Animations like every other factory:
 // `scene.play(title[0..<3].color(.orange), for: 0.5.s)`.
 
@@ -69,6 +69,18 @@ public extension TextEntity {
 
     subscript(range: PartialRangeFrom<Int>) -> GlyphSlice {
         GlyphSlice(text: self, range: range.lowerBound..<Int.max)
+    }
+
+    /// The last `count` glyphs (clamped like every slice) — reads better than
+    /// `formula[(formula.glyphCount - 4)...]` and chains through optionals:
+    /// `scene.play(formula?.suffix(4).color(.teal))`.
+    func suffix(_ count: Int) -> GlyphSlice {
+        GlyphSlice(text: self, range: Swift.max(glyphCount - count, 0)..<Int.max)
+    }
+
+    /// The first `count` glyphs (clamped).
+    func prefix(_ count: Int) -> GlyphSlice {
+        GlyphSlice(text: self, range: 0..<Swift.max(count, 0))
     }
 }
 

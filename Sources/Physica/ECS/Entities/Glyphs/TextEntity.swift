@@ -63,13 +63,15 @@ public final class TextEntity: Entity {
 
     /// Lays out `text` left-to-right and centers it on the origin. `font`
     /// defaults to `Font.default` (the `Config.defaultFont` registration; the
-    /// empty face when nothing is loaded), so `TextEntity("Hi")` just works.
-    public init(_ text: String, font: Font = .default, fontSize: Real = 1, color: Color = .white) {
+    /// empty face when nothing is loaded), so `TextEntity("Hi")` just works —
+    /// and `nil` means the same, so an optional face flows straight through
+    /// (`TextEntity("Hi", font: FontBook.resolve(.body).font)`).
+    public init(_ text: String, font: Font? = nil, fontSize: Real = 1, color: Color = .white) {
         self.text = text
         super.init()
 
         components[TextComponent.self] = TextComponent(
-            glyphs: Self.layoutGlyphs(text, font: font), fontSize: fontSize
+            glyphs: Self.layoutGlyphs(text, font: font ?? .default), fontSize: fontSize
         )
         components[RenderStyleComponent.self] = RenderStyleComponent(
             color: color,
@@ -223,6 +225,19 @@ public extension Animation {
         )
         animation.easing = .linear
         return animation
+    }
+
+    /// Optional-tolerant `.write`: nil text → nil animation, which `scene.play`
+    /// drops (enqueueing nothing) — `try?`-built math plays without an `if let`.
+    static func write(_ text: TextEntity?) -> Animation? {
+        guard let text else { return nil }
+        return write(text)
+    }
+
+    /// Optional-tolerant `.erase` for text.
+    static func erase(_ text: TextEntity?) -> Animation? {
+        guard let text else { return nil }
+        return erase(text)
     }
 }
 

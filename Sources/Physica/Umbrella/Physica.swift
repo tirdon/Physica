@@ -15,4 +15,5 @@
 @_exported import PhysicaCharts
 @_exported import PhysicaPhysics
 @_exported import PhysicaEquationGame
+@_exported import PhysicaArticle
 @_exported import PhysicaWeb

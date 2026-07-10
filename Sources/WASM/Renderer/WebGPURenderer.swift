@@ -35,6 +35,7 @@ final class WebGPURenderer: RenderBackend {
     private var stencilPipeline: JSValue = .undefined
     private var coverPipeline: JSValue = .undefined
     private var strokePipeline: JSValue = .undefined
+    private var strokeClearPipeline: JSValue = .undefined
     private var meshPipeline: JSValue = .undefined
     private var outlinePipeline: JSValue = .undefined
     private var spritePipeline: JSValue = .undefined
@@ -290,13 +291,28 @@ final class WebGPURenderer: RenderBackend {
             )
         )
 
+        // Strokes are CPU-expanded overlapping quads (+ cap discs), so a
+        // translucent stroke would double-blend at every joint/disc overlap —
+        // visible shingling on curves (neon halos, opacity fades). Write-once
+        // per command: blend only where stencil == 0 and bump it, then a
+        // second color-masked draw of the same geometry zeroes the marks so
+        // the next stroke or fill winding starts clean.
         strokePipeline = pipeline(
             vertexEntry: "vs_flat", fragmentEntry: "fs_color", buffers: flatVertexBuffers,
             target: target(blend: true),
             depthStencil: depthStencil(
                 depthWrite: false, depthCompare: "always",
-                front: stencilFace(compare: "always", passOp: "keep"),
-                back: stencilFace(compare: "always", passOp: "keep")
+                front: stencilFace(compare: "equal", passOp: "increment-clamp"),
+                back: stencilFace(compare: "equal", passOp: "increment-clamp")
+            )
+        )
+        strokeClearPipeline = pipeline(
+            vertexEntry: "vs_flat", fragmentEntry: "fs_color", buffers: flatVertexBuffers,
+            target: target(blend: false, writeMask: 0),
+            depthStencil: depthStencil(
+                depthWrite: false, depthCompare: "always",
+                front: stencilFace(compare: "always", passOp: "zero"),
+                back: stencilFace(compare: "always", passOp: "zero")
             )
         )
 
@@ -468,6 +484,12 @@ final class WebGPURenderer: RenderBackend {
                 boundMesh = false
                 _ = pass.setBindGroup(1, drawBindGroup, [command.uniformOffset].jsValue)
                 _ = pass.draw(command.vertexCount, 1, command.vertexStart, 0)
+                if command.kind == .stroke {
+                    // Zero the write-once marks so the next stroke (or fill
+                    // winding) starts from a clean stencil.
+                    _ = pass.setPipeline(strokeClearPipeline)
+                    _ = pass.draw(command.vertexCount, 1, command.vertexStart, 0)
+                }
             case .sprite:
                 guard let url = command.textureURL else { continue }
                 switch spriteTextures[url] {

@@ -168,7 +168,7 @@ public struct DoubleTapComponent: Component {
 }
 
 public extension DoubleTapComponent {
-    /// Double-click the entity to highlight *itself* — the neon loading-loop
+    /// Double-click the entity to highlight *itself* — the neon circumscribe
     /// around its own bounds. Runs on the interaction layer (`scene.interact`),
     /// not the scrub timeline, so it fires live even while a story rests paused
     /// and never lands in the scrubbable history.
@@ -176,10 +176,11 @@ public extension DoubleTapComponent {
     ///     star.components[DoubleTapComponent.self] = .highlightSelf()
     static func highlightSelf(
         color: Color = Color(hex: 0x53F0FF),
-        padding: Real = 0.3
+        padding: Real = 0.3,
+        style: HighlightStyle = .circumscribe
     ) -> DoubleTapComponent {
         DoubleTapComponent { scene, entity in
-            scene.interact(.highlight(entity, color: color, padding: padding))
+            scene.interact(.highlight(entity, color: color, padding: padding, style: style))
         }
     }
 }

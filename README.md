@@ -6,7 +6,7 @@ Manim-style scripted animation API, rendered with WebGPU in the browser.
 - **ECS** — `Entity` + type-keyed `ComponentSet`, `System` protocol with `@MainActor update(context:)`, `EntityQuery`, `Group`/`Row`/`Column`/`Grid` layouts.
 - **Scripted animation** — `scene.add` / `scene.play` / `scene.wait` / `scene.pause(System.self)` enqueue clips on an append-only `Timeline`; every call and every entity animation method returns the same `Animation` currency type, so everything composes (including a result builder).
 - **Scrub-safe** — `seek(t)` replays/rewinds clips deterministically (entities appear/disappear at their `add` clip), pauses all systems, and re-runs updaters. The playback slider in `example1.html` drives it.
-- **Updaters** — `entity.updater = { ... }` (Manim `add_updater` style) or type-safe `entity.bind(\.end, to: bob, \.position)`; both stored in `UpdaterComponent`, run after systems each frame and after every seek.
+- **Updaters** — `entity.updater = { ... }` (Manim `add_updater` style) or type-safe `entity.bind(\.end, to: bob, \.position)`; Position binds are world-aware (source world position → target local space) and accept `Animation` handles as sources. Both stored in `UpdaterComponent`, run after systems each frame and after every seek.
 - **Vector graphics** — `Path` (line/quad/cubic), `Circle`/`Rectangle`/`Triangle`/`Line`/`Arrow`/`Wall`, stencil-then-cover GPU fills (concave shapes and holes are exact), stroke reveal `draw()`, topology-matched `morph(to:)`.
 - **Text** — pure-Swift TrueType parser (`glyf`, cmap 4/12), `TextEntity("…", font:)` with `write()`: glyph-staggered stroke draw, then fill fade.
 - **Math** — MathJax renders TeX → SVG in the browser automatically (zero install — `MathJaxLoader.formula` fetches `tex-svg.js` from jsDelivr). `write()`/`erase()`/`morph()` work unchanged on formulas; per-glyph slicing (`formula[0]`, `formula[1..<4]`) for coloring and animation. `MathSVG` also parses dvisvgm-style markup, so you can pre-bake `.svg` glyph assets with an external `latex` + `dvisvgm` pipeline and load them via `TextEntity.math(svg:)` (no MathJax at runtime).
@@ -210,7 +210,8 @@ for Float/Double parity.
 - Interactions (`scene.interact`, drag/drop) run outside the paused gate — they
   work while the timeline rests paused (essential for story mode).
 - Fonts: TrueType `glyf` outlines only (no CFF/.otf), cmap formats 4/12,
-  offset-only composites. The demo fetches Roboto from jsDelivr (`FontLoader.defaultURL`).
+  offset-only composites. The default face is Computer Modern Serif from jsDelivr
+  (`FontLoader.defaultURL` — the same file as the math role's serif).
 - Math works with **MathJax alone** — no LaTeX installation needed. MathJax
   `tex-svg.js` is fetched from jsDelivr at runtime with `fontCache: "local"`;
   no DOM (Bun smoke) → `.unavailable`, demo skips math. `MathSVG` also accepts

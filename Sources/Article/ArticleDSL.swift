@@ -3,10 +3,11 @@
 // This file has NO Foundation and NO JavaScriptKit; it is pure Swift value types,
 // so `swift build` type-checks it on macOS and the model is a `Sendable` value
 // layer beneath the `@MainActor` DOM renderer (the repo's concurrency split: a
-// pure value graph under a MainActor object graph). It lives in PhysicaWeb next
-// to WebRuntime/StoryRuntime as the third browser-presentation surface; the
-// article renderer (`ArticleDOM`, WASI-only) consumes this model, and an authored
-// `Document` (e.g. Example3's HamiltonianArticle) drives it.
+// pure value graph under a MainActor object graph). It is the leaf of the
+// `PhysicaArticle` target — a JSKit-free home for the document model shared by
+// two consumers: the WASI DOM renderer (`ArticleDOM`, in PhysicaWeb) and the
+// native static-HTML serializer (`ArticleHTML`, same target). An authored
+// `Document` (e.g. Example3's HamiltonianArticle) drives either.
 //
 // The surface (capitalized = structural, lowercase = flow content):
 //
@@ -207,25 +208,37 @@ public struct Document: Sendable {
     /// its luminance (`ArticleStyle.theme(background:)`).
     public var background: Color
 
+    #if os(WASI)
+    /// The WASI auto-mount hook. `PhysicaWeb.DocumentAutoMount.install()` wires
+    /// this to the DOM renderer so a bare `Document("title") { … }` statement
+    /// mounts itself into the page. It lives here (not a direct call) because the
+    /// mount machinery — JavaScriptKit, `ArticleDOM`, MathJax — sits in a target
+    /// that depends *on* this one, so the model can't name it. nil in a
+    /// JSKit-free build (host / native), where the initializer just builds.
+    nonisolated(unsafe) public static var autoMount: ((Document) -> Void)?
+    #endif
+
     public init(background: Color = .documentLight, @DocumentBuilder _ content: () -> [Section]) {
         self.title = ""
         self.background = background
         self.sections = content()
     }
 
-    /// The facade spelling: builds the document AND auto-mounts it into the
-    /// page — `Document("Physics · Rigid bodies") { Title(…); Chapter(…) { … } }`
-    /// as a bare statement renders the article (outline logged first, MathJax
-    /// injected, `ArticleDOM` walked). On the host it just builds the value, so
-    /// authoring code stays host-typecheckable. `background: .documentDark`
-    /// flips the page to the dark palette.
+    /// The facade spelling: builds the document AND (on WASI, once
+    /// `DocumentAutoMount.install()` has run) auto-mounts it into the page —
+    /// `Document("Physics · Rigid bodies") { Title(…); Chapter(…) { … } }` as a
+    /// bare statement renders the article (outline logged first, MathJax
+    /// injected, `ArticleDOM` walked). On the host / native it just builds the
+    /// value, so authoring code stays host-typecheckable and can be serialized to
+    /// a static HTML file (`ArticleHTML`). `background: .documentDark` flips the
+    /// page to the dark palette.
     @discardableResult
     public init(_ title: String, background: Color = .documentLight, @DocumentBuilder _ content: () -> [Section]) {
         self.title = title
         self.background = background
         self.sections = content()
         #if os(WASI)
-        DocumentAutoMount.schedule(self)
+        Document.autoMount?(self)
         #endif
     }
 }

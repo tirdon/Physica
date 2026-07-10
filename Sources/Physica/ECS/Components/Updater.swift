@@ -2,6 +2,8 @@
 //
 // `string.updater = { $0.end = bob.position }`   — Manim add_updater style
 // `string.bind(\.end, to: bob, \.position)`      — type-safe KeyPath form
+//   (Position binds are world-aware, and Animation handles resolve to their
+//   first target, so the pendulum line is exactly this one call.)
 //
 // Both store into UpdaterComponent; the scene runs all updaters after the timeline
 // and systems each frame, and once after every seek, so derived geometry is always
@@ -77,9 +79,71 @@ public extension Animatable where Self: Entity {
         to source: S,
         _ sourceKeyPath: KeyPath<S, V>
     ) -> UInt64 {
+        rawBind(keyPath, source: source, sourceKeyPath)
+    }
+
+    /// Position-valued binds sync **across spaces**: the source value is read
+    /// in the source's parent space (where `position` lives — world, for scene
+    /// roots) and written converted into the target's local space. Root to
+    /// root it is a plain copy; it stays correct once the target — or a group
+    /// move enclosing it — acquires its own transform:
+    /// `string.bind(\.end, to: bob, \.position)`.
+    @discardableResult
+    func bind<S: Entity>(
+        _ keyPath: ReferenceWritableKeyPath<Self, Position>,
+        to source: S,
+        _ sourceKeyPath: KeyPath<S, Position>
+    ) -> UInt64 {
+        positionBind(keyPath, source: source, sourceKeyPath)
+    }
+
+    /// Animation handles work as sources too — `let bob = Circle().move(to: p)`
+    /// keeps behaving like the circle: the bind follows the first animation
+    /// target. Returns 0 (no updater installed) when the source has none.
+    @discardableResult
+    func bind<V>(
+        _ keyPath: ReferenceWritableKeyPath<Self, V>,
+        to source: any Animatable,
+        _ sourceKeyPath: KeyPath<Entity, V>
+    ) -> UInt64 {
+        guard let entity = source.animationTargets.first else { return 0 }
+        return rawBind(keyPath, source: entity, sourceKeyPath)
+    }
+
+    /// Animation-handle source, Position-valued (world-aware like the entity form).
+    @discardableResult
+    func bind(
+        _ keyPath: ReferenceWritableKeyPath<Self, Position>,
+        to source: any Animatable,
+        _ sourceKeyPath: KeyPath<Entity, Position>
+    ) -> UInt64 {
+        guard let entity = source.animationTargets.first else { return 0 }
+        return positionBind(keyPath, source: entity, sourceKeyPath)
+    }
+
+    /// Non-overloaded workers behind `bind` (the overload set could otherwise
+    /// re-enter itself through the existential/optional conversions).
+    private func rawBind<S: Entity, V>(
+        _ keyPath: ReferenceWritableKeyPath<Self, V>,
+        source: S,
+        _ sourceKeyPath: KeyPath<S, V>
+    ) -> UInt64 {
         addUpdater { [weak source] target in
             guard let source else { return }
             target[keyPath: keyPath] = source[keyPath: sourceKeyPath]
+        }
+    }
+
+    private func positionBind<S: Entity>(
+        _ keyPath: ReferenceWritableKeyPath<Self, Position>,
+        source: S,
+        _ sourceKeyPath: KeyPath<S, Position>
+    ) -> UInt64 {
+        addUpdater { [weak source] target in
+            guard let source else { return }
+            let value = source[keyPath: sourceKeyPath]
+            let world = source.parent?.worldTransform.applying(to: value) ?? value
+            target[keyPath: keyPath] = target.convert(worldPosition: world)
         }
     }
 }
